@@ -5,9 +5,15 @@ import SeniorApp from './components/SeniorApp.jsx'
 import CopilotApp from './components/CopilotApp.jsx'
 
 function Router() {
-  const { session, isLinked, enoFamilyRole } = useApp()
+  const { session, isLinked, enoFamilyRole, linkStatusLoading } = useApp()
 
   if (!session) return <LoginScreen />
+
+  // Avoid flashing the unlinked flow while we check for a link left over
+  // from a previous session (see AppContext's getLinkStatus effect).
+  if (linkStatusLoading) {
+    return <p className="p-6 text-sm text-gray-400">Cargando tu cuenta…</p>
+  }
 
   // Features stay locked until the Eno Family handshake completes.
   if (!isLinked) return <UnlinkedApp />

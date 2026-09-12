@@ -1,4 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
+import { getLinkStatus } from '../services/linksApi.js'
+import { connectSocket, disconnectSocket } from '../services/socket.js'
 
 const AppContext = createContext(null)
 
@@ -29,10 +31,11 @@ function writeStore(value) {
 export function AppProvider({ children }) {
   const [session, setSession] = useState(null) // { firstName, customerId }
 
-  // Eno Family linking state.
+  // Eno Family linking state — backed by the /server links API + socket.io,
+  // not simulated. See services/linksApi.js and services/socket.js.
   const [enoFamilyRole, setEnoFamilyRole] = useState(null) // null | 'senior' | 'copilot'
-  const [linkCode, setLinkCode] = useState('')
   const [isLinked, setIsLinked] = useState(false)
+  const [linkStatusLoading, setLinkStatusLoading] = useState(false)
 
   // Virtual card request handshake.
   // pendingCardRequest: { category, limit } | null
@@ -62,6 +65,30 @@ export function AppProvider({ children }) {
     return () => window.removeEventListener('storage', sync)
   }, [])
 
+  // One socket per signed-in customer, and a one-time check for a link left
+  // over from a previous session — real persistence, not sessionStorage.
+  useEffect(() => {
+    if (!session) return
+    let cancelled = false
+    setLinkStatusLoading(true)
+    connectSocket(session.customerId)
+    getLinkStatus(session.customerId)
+      .then((status) => {
+        if (cancelled) return
+        if (status.linked) completeLink(status.role)
+      })
+      .catch(() => {
+        /* backend unreachable — fall back to the unlinked flow */
+      })
+      .finally(() => {
+        if (!cancelled) setLinkStatusLoading(false)
+      })
+    return () => {
+      cancelled = true
+      disconnectSocket()
+    }
+  }, [session])
+
   const signIn = (firstName, customerId) =>
     setSession({
       firstName: firstName.trim(),
@@ -82,7 +109,6 @@ export function AppProvider({ children }) {
 
   const resetLink = () => {
     setEnoFamilyRole(null)
-    setLinkCode('')
     setIsLinked(false)
   }
 
@@ -107,11 +133,8 @@ export function AppProvider({ children }) {
         signIn,
         signOut,
         enoFamilyRole,
-        setEnoFamilyRole,
-        linkCode,
-        setLinkCode,
         isLinked,
-        setIsLinked,
+        linkStatusLoading,
         completeLink,
         resetLink,
         pendingCardRequest,

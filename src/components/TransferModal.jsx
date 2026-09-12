@@ -1,14 +1,34 @@
 import { useCallback, useEffect, useState } from 'react'
-import { X, CheckCircle2 } from 'lucide-react'
+import { X, CheckCircle2, Loader2, Pause } from 'lucide-react'
 import { createTransfer, getAccountTransfers } from '../services/api.js'
+import { requestHighValueTransfer } from '../services/transfersApi.js'
+import { getSocket } from '../services/socket.js'
+import { useApp } from '../context/AppContext.jsx'
 import { formatMoney, formatDate } from './Brand.jsx'
 import { MOST_RECENT_SUNDAY } from '../data/mockPurchases.js'
+import SupportCallButton from './SupportCallButton.jsx'
+
+// Above this, a senior's transfer is held for their copilot to approve
+// instead of executing immediately — see server/src/routes/transfers.js.
+const HIGH_VALUE_THRESHOLD = 10000
+
+const buildOptimisticPurchase = (description, amount) => ({
+  _id: `local_${Date.now()}`,
+  merchant_id: 'mch_00000000000000transfer',
+  description,
+  amount,
+  purchase_date: MOST_RECENT_SUNDAY,
+})
 
 /**
  * Simple transfer modal. `big` switches to Easy Mode sizing.
  * `addPurchase` (from useAccountData) is optional; when passed, a completed
  * transfer is also injected into the local purchases feed so the weekly
  * chart, "Movimientos recientes", and the displayed balance update at once.
+ *
+ * A senior sending more than HIGH_VALUE_THRESHOLD doesn't hit Nessie here at
+ * all: it's held for their copilot to approve/hold (see CoPilotTab.jsx), and
+ * this modal just waits on the matching socket.io event.
  */
 export default function TransferModal({
   payerAccountId,
@@ -17,11 +37,14 @@ export default function TransferModal({
   addPurchase,
   big = false,
 }) {
+  const { session, enoFamilyRole } = useApp()
   const [payeeId, setPayeeId] = useState('')
   const [concept, setConcept] = useState('')
   const [amount, setAmount] = useState('')
-  const [status, setStatus] = useState('idle') // idle | sending | done | error
+  // idle | sending | done | error | awaiting_approval | held
+  const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
+  const [pendingRequestId, setPendingRequestId] = useState(null)
 
   // Recent movements from this same account, reusing the Enviar transfer model.
   const [transfers, setTransfers] = useState([])
@@ -62,17 +85,34 @@ export default function TransferModal({
       setError('Escribe una cuenta destino, un concepto y un monto válido.')
       return
     }
+    const trimmedPayeeId = payeeId.trim()
+    const trimmedConcept = concept.trim()
     setError('')
     setStatus('sending')
+
+    // enoFamilyRole is only 'senior' once isLinked is true (see AppContext),
+    // so this alone confirms there's a copilot to hold the transfer for.
+    if (enoFamilyRole === 'senior' && value > HIGH_VALUE_THRESHOLD) {
+      try {
+        const created = await requestHighValueTransfer({
+          seniorCustomerId: session.customerId,
+          payerAccountId,
+          payeeId: trimmedPayeeId,
+          amount: value,
+          concept: trimmedConcept,
+        })
+        setPendingRequestId(created.id)
+        setStatus('awaiting_approval')
+      } catch (err) {
+        setStatus('error')
+        setError(err.message)
+      }
+      return
+    }
+
     try {
-      await createTransfer(payerAccountId, payeeId.trim(), value, concept.trim())
-      addPurchase?.({
-        _id: `local_${Date.now()}`,
-        merchant_id: 'mch_00000000000000transfer',
-        description: concept.trim(),
-        amount: value,
-        purchase_date: MOST_RECENT_SUNDAY,
-      })
+      await createTransfer(payerAccountId, trimmedPayeeId, value, trimmedConcept)
+      addPurchase?.(buildOptimisticPurchase(trimmedConcept, value))
       setStatus('done')
       loadHistory()
       onSuccess?.()
@@ -81,6 +121,27 @@ export default function TransferModal({
       setError(err.message)
     }
   }
+
+  // Waiting on the copilot's decision: no polling, just the socket.io event
+  // server/src/routes/transfers.js emits the moment /resolve is called.
+  useEffect(() => {
+    if (status !== 'awaiting_approval' || pendingRequestId == null) return
+    const socket = getSocket()
+    if (!socket) return
+    const onResolved = (payload) => {
+      if (payload.id !== pendingRequestId) return
+      if (payload.decision === 'approved') {
+        addPurchase?.(buildOptimisticPurchase(payload.concept, payload.amount))
+        loadHistory()
+        onSuccess?.()
+        setStatus('done')
+      } else {
+        setStatus('held')
+      }
+    }
+    socket.on('transfer:resolved', onResolved)
+    return () => socket.off('transfer:resolved', onResolved)
+  }, [status, pendingRequestId, addPurchase, onSuccess, loadHistory])
 
   return (
     <div className="absolute inset-0 z-[60] bg-black/50 flex items-end">
@@ -98,7 +159,7 @@ export default function TransferModal({
           </button>
         </div>
 
-        {status === 'done' ? (
+        {status === 'done' && (
           <div className="py-6 text-center">
             <CheckCircle2 size={big ? 72 : 56} className="mx-auto text-green-600" />
             <p className={big ? 'mt-4 text-2xl font-bold text-[#003A6F]' : 'mt-3 text-lg font-bold text-[#003A6F]'}>
@@ -111,7 +172,44 @@ export default function TransferModal({
               Listo
             </button>
           </div>
-        ) : (
+        )}
+
+        {status === 'awaiting_approval' && (
+          <div className="py-6 text-center">
+            <Loader2 size={big ? 72 : 56} className="mx-auto text-[#003A6F] animate-spin" />
+            <p className={big ? 'mt-4 text-2xl font-bold text-[#003A6F]' : 'mt-3 text-lg font-bold text-[#003A6F]'}>
+              Esperando aprobación de tu copiloto…
+            </p>
+            <p className={`mt-2 text-gray-500 ${big ? 'text-lg' : 'text-sm'}`}>
+              Los montos mayores a {formatMoney(HIGH_VALUE_THRESHOLD)} necesitan su autorización.
+            </p>
+          </div>
+        )}
+
+        {status === 'held' && (
+          <div className="py-6 text-center">
+            <Pause size={big ? 72 : 56} className="mx-auto text-[#D03027]" />
+            <p className={big ? 'mt-4 text-2xl font-bold text-[#003A6F]' : 'mt-3 text-lg font-bold text-[#003A6F]'}>
+              Tu copiloto detuvo esta transferencia.
+            </p>
+            <p className={`mt-2 text-gray-500 ${big ? 'text-lg' : 'text-sm'}`}>
+              No se realizó ningún cargo.
+            </p>
+            <button
+              onClick={onClose}
+              className={`mt-6 w-full ${big ? 'h-16 text-xl' : 'h-12 text-base'} bg-[#003A6F] text-white font-bold rounded-xl`}
+            >
+              Entendido
+            </button>
+
+            {/* If this was a mistake, get the senior straight to a human. */}
+            <div className="mt-3">
+              <SupportCallButton />
+            </div>
+          </div>
+        )}
+
+        {(status === 'idle' || status === 'sending' || status === 'error') && (
           <form onSubmit={submit} className="space-y-4">
             <div>
               <label className={label}>Cuenta destino (Payee ID)</label>
@@ -156,7 +254,7 @@ export default function TransferModal({
           </form>
         )}
 
-        {status !== 'done' && (
+        {(status === 'idle' || status === 'sending' || status === 'error') && (
           <div className="mt-6">
             <h3 className={big ? 'text-xl font-bold text-[#003A6F] mb-3' : 'text-sm font-bold text-[#003A6F] mb-2'}>
               Envíos recientes

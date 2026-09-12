@@ -1,30 +1,91 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { X, UserPlus, Users, Loader2, ShieldCheck, ArrowLeft } from 'lucide-react'
 import PinPad, { PinDots } from './PinPad.jsx'
 import { useApp } from '../context/AppContext.jsx'
+import { createLink, verifyLink, authorizeLink } from '../services/linksApi.js'
+import { getSocket } from '../services/socket.js'
 
 const STEPS = {
   CHOICE: 'choice',
   SENIOR_CODE: 'senior_code',
   COPILOT_CODE: 'copilot_code',
+  COPILOT_WAITING: 'copilot_waiting',
   CONSENT: 'consent',
 }
 
-// 6 digits, displayed as 849-201.
-function generateCode() {
-  const n = Math.floor(Math.random() * 1_000_000)
-  return String(n).padStart(6, '0')
+// Matches the consent copy below: monitoring only, no money movement.
+const GRANTED_PERMISSIONS = {
+  canMonitor: true,
+  canTransfer: false,
+  canViewFullBalance: false,
 }
 
 const formatCode = (raw) => `${raw.slice(0, 3)}-${raw.slice(3)}`
 
 export default function EnoFamilyOnboarding({ onClose }) {
-  const { linkCode, setLinkCode, completeLink } = useApp()
+  const { session, completeLink } = useApp()
   const [step, setStep] = useState(STEPS.CHOICE)
+  const [choiceError, setChoiceError] = useState('')
+  const [creatingLink, setCreatingLink] = useState(false)
 
-  const startSenior = () => {
-    setLinkCode(generateCode())
-    setStep(STEPS.SENIOR_CODE)
+  // Senior's freshly-issued code, from the server.
+  const [link, setLink] = useState(null) // { id, code, expiresAt }
+  // Copilot's verified link, from the server.
+  const [verifiedLinkId, setVerifiedLinkId] = useState(null)
+
+  const startSenior = async () => {
+    setChoiceError('')
+    setCreatingLink(true)
+    try {
+      const created = await createLink(session.customerId)
+      setLink(created)
+      setStep(STEPS.SENIOR_CODE)
+    } catch (err) {
+      setChoiceError(err.message)
+    } finally {
+      setCreatingLink(false)
+    }
+  }
+
+  // Senior: the copilot verifying the code arrives as a socket event, not a
+  // button click — advance to consent the moment it does.
+  useEffect(() => {
+    if (step !== STEPS.SENIOR_CODE || !link) return
+    const socket = getSocket()
+    if (!socket) return
+    const onVerified = (payload) => {
+      if (payload.linkId === link.id) setStep(STEPS.CONSENT)
+    }
+    socket.on('link:verified', onVerified)
+    return () => socket.off('link:verified', onVerified)
+  }, [step, link])
+
+  const handleVerify = async (code) => {
+    const verified = await verifyLink(code, session.customerId)
+    setVerifiedLinkId(verified.linkId)
+    setStep(STEPS.COPILOT_WAITING)
+  }
+
+  // Copilot: verifying the code isn't the end of it — the senior still has
+  // to authorize. That arrives as a second socket event.
+  useEffect(() => {
+    if (step !== STEPS.COPILOT_WAITING || verifiedLinkId == null) return
+    const socket = getSocket()
+    if (!socket) return
+    const onAuthorized = (payload) => {
+      if (payload.linkId === verifiedLinkId) {
+        completeLink('copilot')
+        onClose()
+      }
+    }
+    socket.on('link:authorized', onAuthorized)
+    return () => socket.off('link:authorized', onAuthorized)
+  }, [step, verifiedLinkId, completeLink, onClose])
+
+  const handleAuthorize = async () => {
+    await authorizeLink(link.id, GRANTED_PERMISSIONS)
+    completeLink('senior')
+    onClose()
   }
 
   return (
@@ -56,27 +117,14 @@ export default function EnoFamilyOnboarding({ onClose }) {
           <ChoiceStep
             onSenior={startSenior}
             onCopilot={() => setStep(STEPS.COPILOT_CODE)}
+            loading={creatingLink}
+            error={choiceError}
           />
         )}
-        {step === STEPS.SENIOR_CODE && (
-          <SeniorCodeStep code={linkCode} onEntered={() => setStep(STEPS.CONSENT)} />
-        )}
-        {step === STEPS.COPILOT_CODE && (
-          <CopilotCodeStep
-            onVerified={() => {
-              completeLink('copilot')
-              onClose()
-            }}
-          />
-        )}
-        {step === STEPS.CONSENT && (
-          <ConsentStep
-            onAuthorized={() => {
-              completeLink('senior')
-              onClose()
-            }}
-          />
-        )}
+        {step === STEPS.SENIOR_CODE && <SeniorCodeStep code={link.code} />}
+        {step === STEPS.COPILOT_CODE && <CopilotCodeStep onSubmit={handleVerify} />}
+        {step === STEPS.COPILOT_WAITING && <CopilotWaitingStep />}
+        {step === STEPS.CONSENT && <ConsentStep onAuthorize={handleAuthorize} />}
       </div>
     </div>
   )
@@ -84,7 +132,7 @@ export default function EnoFamilyOnboarding({ onClose }) {
 
 /* ---------------------------- Step 1: choice ---------------------------- */
 
-function ChoiceStep({ onSenior, onCopilot }) {
+function ChoiceStep({ onSenior, onCopilot, loading, error }) {
   return (
     <div className="p-5">
       <h1 className="text-2xl font-bold text-[#003A6F]">Protege a los tuyos</h1>
@@ -95,11 +143,16 @@ function ChoiceStep({ onSenior, onCopilot }) {
       <div className="mt-6 space-y-4">
         <button
           onClick={onSenior}
-          className="w-full bg-white rounded-2xl p-5 shadow-sm text-left border-2 border-transparent active:border-[#003A6F]"
+          disabled={loading}
+          className="w-full bg-white rounded-2xl p-5 shadow-sm text-left border-2 border-transparent active:border-[#003A6F] disabled:opacity-60"
         >
           <div className="flex items-start gap-3">
             <div className="h-12 w-12 rounded-full bg-[#003A6F] flex items-center justify-center shrink-0">
-              <UserPlus size={22} className="text-white" />
+              {loading ? (
+                <Loader2 size={22} className="text-white animate-spin" />
+              ) : (
+                <UserPlus size={22} className="text-white" />
+              )}
             </div>
             <div>
               <p className="font-bold text-[#003A6F] text-base leading-snug">
@@ -132,14 +185,16 @@ function ChoiceStep({ onSenior, onCopilot }) {
             </div>
           </div>
         </button>
+
+        {error && <p className="text-sm text-[#D03027] font-medium">{error}</p>}
       </div>
     </div>
   )
 }
 
-/* ------------------- Step 2A: senior generates a code ------------------- */
+/* ------------------- Step 2A: senior's server-issued code ------------------- */
 
-function SeniorCodeStep({ code, onEntered }) {
+function SeniorCodeStep({ code }) {
   return (
     <div className="p-5 text-center">
       <h1 className="text-xl font-bold text-[#003A6F]">Tu código de vinculación</h1>
@@ -157,30 +212,30 @@ function SeniorCodeStep({ code, onEntered }) {
         <Loader2 size={18} className="animate-spin" />
         <p className="text-sm">Esperando a que tu familiar ingrese el código…</p>
       </div>
-
-      <button
-        onClick={onEntered}
-        className="mt-10 w-full h-12 rounded-full border-2 border-dashed border-gray-400 text-gray-500 text-sm font-semibold"
-      >
-        [DEV] Simulate Code Entered
-      </button>
     </div>
   )
 }
 
 /* -------------------- Step 2B: copilot enters a code -------------------- */
 
-function CopilotCodeStep({ onVerified }) {
+function CopilotCodeStep({ onSubmit }) {
   const [digits, setDigits] = useState('')
   const [error, setError] = useState('')
+  const [verifying, setVerifying] = useState(false)
 
-  const verify = () => {
+  const verify = async () => {
     if (digits.length !== 6) {
       setError('Ingresa los 6 dígitos del código.')
       return
     }
     setError('')
-    onVerified()
+    setVerifying(true)
+    try {
+      await onSubmit(digits)
+    } catch (err) {
+      setError(err.message)
+      setVerifying(false)
+    }
   }
 
   return (
@@ -220,27 +275,53 @@ function CopilotCodeStep({ onVerified }) {
 
       <button
         onClick={verify}
-        className="mt-6 w-full h-14 rounded-xl bg-[#003A6F] text-white font-bold text-base"
+        disabled={verifying}
+        className="mt-6 w-full h-14 rounded-xl bg-[#003A6F] text-white font-bold text-base disabled:opacity-60"
       >
-        Verificar
+        {verifying ? 'Verificando…' : 'Verificar'}
       </button>
+    </div>
+  )
+}
+
+/* --------------- Step 2B-continued: waiting for the senior --------------- */
+
+function CopilotWaitingStep() {
+  return (
+    <div className="p-5 text-center">
+      <h1 className="text-xl font-bold text-[#003A6F]">Código verificado</h1>
+      <p className="mt-2 text-sm text-gray-600">
+        Ahora tu familiar debe autorizar la vinculación desde su teléfono.
+      </p>
+
+      <div className="mt-10 flex items-center justify-center gap-2 text-gray-500">
+        <Loader2 size={18} className="animate-spin" />
+        <p className="text-sm">Esperando autorización…</p>
+      </div>
     </div>
   )
 }
 
 /* ------------------ Step 3: senior consent + NIP signing ---------------- */
 
-function ConsentStep({ onAuthorized }) {
+function ConsentStep({ onAuthorize }) {
   const [nip, setNip] = useState('')
   const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
-  const submit = () => {
+  const submit = async () => {
     if (nip.length !== 4) {
       setError('Tu NIP debe tener 4 dígitos.')
       return
     }
     setError('')
-    onAuthorized()
+    setSubmitting(true)
+    try {
+      await onAuthorize()
+    } catch (err) {
+      setError(err.message)
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -282,11 +363,11 @@ function ConsentStep({ onAuthorized }) {
 
       <button
         onClick={submit}
-        className="mt-5 w-full h-14 rounded-xl bg-[#D03027] text-white font-bold text-base shadow-md"
+        disabled={submitting}
+        className="mt-5 w-full h-14 rounded-xl bg-[#D03027] text-white font-bold text-base shadow-md disabled:opacity-60"
       >
-        Firmar y Autorizar
+        {submitting ? 'Firmando…' : 'Firmar y Autorizar'}
       </button>
     </div>
   )
 }
-
