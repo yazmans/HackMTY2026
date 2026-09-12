@@ -1,10 +1,7 @@
+import capitalOneLogo from '../assets/capital-one-logo.webp'
+
 export function CapitalOneLogo() {
-  return (
-    <div className="flex items-center font-bold text-[#003A6F] text-xl tracking-tighter">
-      Capital One{' '}
-      <span className="text-[#D03027] text-3xl leading-none ml-1 relative -top-1">›</span>
-    </div>
-  )
+  return <img src={capitalOneLogo} alt="Capital One" className="h-8 w-auto" />
 }
 
 export function Header({ children }) {

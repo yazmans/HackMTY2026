@@ -26,7 +26,7 @@ export default function LoginScreen() {
     <>
       <Header />
       <div className="flex-1 overflow-y-auto no-scrollbar px-6 py-8">
-        <h1 className="text-2xl font-bold text-[#003A6F]">Bienvenido a Kin</h1>
+        <h1 className="text-2xl font-bold text-[#003A6F]">Bienvenido a Capital One</h1>
         <p className="mt-1 text-sm text-gray-500">
           Inicia sesión con tus datos de Nessie.
         </p>
