@@ -1,6 +1,6 @@
 // Real Capital One Nessie API service.
 // Get a key at http://api.reimaginebanking.com and paste it below.
-export const NESSIE_API_KEY = 'YOUR_API_KEY_HERE'
+export const NESSIE_API_KEY = 'API_KEY_HERE'
 
 const BASE_URL = 'http://api.reimaginebanking.com'
 

@@ -5,6 +5,11 @@ const AppContext = createContext(null)
 export function AppProvider({ children }) {
   const [session, setSession] = useState(null) // { firstName, customerId, accountId }
 
+  // Eno Family linking state.
+  const [enoFamilyRole, setEnoFamilyRole] = useState(null) // null | 'senior' | 'copilot'
+  const [linkCode, setLinkCode] = useState('')
+  const [isLinked, setIsLinked] = useState(false)
+
   const signIn = (firstName, customerId, accountId) =>
     setSession({
       firstName: firstName.trim(),
@@ -12,10 +17,39 @@ export function AppProvider({ children }) {
       accountId: accountId.trim(),
     })
 
-  const signOut = () => setSession(null)
+  const signOut = () => {
+    setSession(null)
+    resetLink()
+  }
+
+  // Completes the handshake for whichever side finished it.
+  const completeLink = (role) => {
+    setEnoFamilyRole(role)
+    setIsLinked(true)
+  }
+
+  const resetLink = () => {
+    setEnoFamilyRole(null)
+    setLinkCode('')
+    setIsLinked(false)
+  }
 
   return (
-    <AppContext.Provider value={{ session, signIn, signOut }}>
+    <AppContext.Provider
+      value={{
+        session,
+        signIn,
+        signOut,
+        enoFamilyRole,
+        setEnoFamilyRole,
+        linkCode,
+        setLinkCode,
+        isLinked,
+        setIsLinked,
+        completeLink,
+        resetLink,
+      }}
+    >
       {children}
     </AppContext.Provider>
   )

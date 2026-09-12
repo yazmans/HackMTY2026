@@ -1,12 +1,21 @@
 import { AppProvider, useApp } from './context/AppContext.jsx'
 import LoginScreen from './components/LoginScreen.jsx'
-import EleanorApp from './components/EleanorApp.jsx'
-import MarcusApp from './components/MarcusApp.jsx'
+import UnlinkedApp from './components/UnlinkedApp.jsx'
+import SeniorApp from './components/SeniorApp.jsx'
+import CopilotApp from './components/CopilotApp.jsx'
 
 function Router() {
-  const { session } = useApp()
+  const { session, isLinked, enoFamilyRole } = useApp()
+
   if (!session) return <LoginScreen />
-  return session.firstName.toLowerCase() === 'eleanor' ? <EleanorApp /> : <MarcusApp />
+
+  // Features stay locked until the Eno Family handshake completes.
+  if (!isLinked) return <UnlinkedApp />
+
+  if (enoFamilyRole === 'senior') return <SeniorApp />
+  if (enoFamilyRole === 'copilot') return <CopilotApp />
+
+  return <UnlinkedApp />
 }
 
 export default function App() {

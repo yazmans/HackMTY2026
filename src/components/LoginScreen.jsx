@@ -39,7 +39,7 @@ export default function LoginScreen() {
             </label>
             <input
               className={inputClass}
-              placeholder="Eleanor o Marcus"
+              placeholder="Tu nombre"
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
             />
@@ -82,8 +82,8 @@ export default function LoginScreen() {
         <div className="mt-8 flex items-start gap-2 text-xs text-gray-500">
           <Lock size={14} className="mt-0.5 shrink-0" />
           <p>
-            Prototipo conectado a la API real de Nessie. Escribe «Eleanor» para el modo
-            adulto mayor o «Marcus» para el modo co-piloto.
+            Prototipo conectado a la API real de Nessie. Tu rol se define al vincular tu
+            cuenta con Eno Family desde el inicio.
           </p>
         </div>
       </div>

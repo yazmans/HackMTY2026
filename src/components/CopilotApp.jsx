@@ -1,0 +1,150 @@
+import { useState } from 'react'
+import { Home, ArrowLeftRight, ShieldCheck, LogOut } from 'lucide-react'
+import { Header } from './Brand.jsx'
+import StandardDashboard from './StandardDashboard.jsx'
+import TransferModal from './TransferModal.jsx'
+import CoPilotTab from './CoPilotTab.jsx'
+import { useApp } from '../context/AppContext.jsx'
+import { useAccountData } from '../hooks/useAccountData.js'
+
+const TABS = [
+  { key: 'home', label: 'Home', icon: Home },
+  { key: 'transfers', label: 'Transfers', icon: ArrowLeftRight },
+  { key: 'copilot', label: 'Eno Family', icon: ShieldCheck },
+]
+
+/** Unlocked for enoFamilyRole === 'copilot'. */
+export default function CopilotApp() {
+  const { session, signOut } = useApp()
+  const [tab, setTab] = useState('home')
+  const [showTransfer, setShowTransfer] = useState(false)
+  const { account, purchases, loading, error, reload } = useAccountData(
+    session.customerId,
+    session.accountId
+  )
+
+  return (
+    <>
+      <Header>
+        <button
+          onClick={signOut}
+          aria-label="Cerrar sesión"
+          className="h-12 w-12 flex items-center justify-center text-[#003A6F]"
+        >
+          <LogOut size={20} />
+        </button>
+      </Header>
+
+      <div className="flex-1 overflow-y-auto no-scrollbar pb-24">
+        {tab === 'home' && (
+          <StandardDashboard
+            firstName={session.firstName}
+            account={account}
+            purchases={purchases}
+            loading={loading}
+            error={error}
+            onReload={reload}
+            onTransfer={() => setShowTransfer(true)}
+            onSignOut={signOut}
+          />
+        )}
+
+        {tab === 'transfers' && (
+          <TransfersTab onNew={() => setShowTransfer(true)} />
+        )}
+
+        {tab === 'copilot' && <CoPilotHost session={session} />}
+      </div>
+
+      <nav className="absolute bottom-0 w-full h-[80px] bg-white border-t flex justify-around items-center z-50 pb-4">
+        {TABS.map(({ key, label, icon: Icon }) => {
+          const active = tab === key
+          return (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              className="flex flex-col items-center gap-1 w-24 h-12 justify-center"
+            >
+              <Icon size={22} className={active ? 'text-[#D03027]' : 'text-gray-400'} />
+              <span
+                className={`text-[11px] font-semibold ${
+                  active ? 'text-[#D03027]' : 'text-gray-400'
+                }`}
+              >
+                {label}
+              </span>
+            </button>
+          )
+        })}
+      </nav>
+
+      {showTransfer && (
+        <TransferModal
+          payerAccountId={session.accountId}
+          onClose={() => setShowTransfer(false)}
+          onSuccess={reload}
+        />
+      )}
+    </>
+  )
+}
+
+function TransfersTab({ onNew }) {
+  return (
+    <div className="p-4 space-y-4">
+      <h1 className="text-2xl font-bold text-[#003A6F]">Transferencias</h1>
+      <p className="text-sm text-gray-500">
+        Envía dinero desde tu cuenta a cualquier cuenta Nessie.
+      </p>
+      <button
+        onClick={onNew}
+        className="w-full h-14 rounded-xl bg-[#003A6F] text-white font-bold text-base shadow-md"
+      >
+        Nueva transferencia
+      </button>
+
+      <div className="bg-white rounded-2xl p-4 shadow-sm">
+        <h3 className="text-sm font-bold text-[#003A6F] mb-2">Contactos frecuentes</h3>
+        <ul className="divide-y divide-gray-100">
+          {['Eleanor R.', 'Renta', 'Ahorro familiar'].map((name) => (
+            <li key={name} className="py-3 flex items-center justify-between">
+              <span className="text-sm text-[#003A6F] font-medium">{name}</span>
+              <span className="text-xs text-gray-400">Nessie</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  )
+}
+
+// The linked senior's account id isn't exchanged in this prototype, so the
+// caregiver dashboard defaults to the signed-in account and can be retargeted.
+function CoPilotHost({ session }) {
+  const [monitoredId, setMonitoredId] = useState(session.accountId)
+  const [draft, setDraft] = useState(session.accountId)
+
+  return (
+    <div>
+      <div className="px-4 pt-4">
+        <label className="block text-xs font-semibold text-gray-600 mb-1">
+          Cuenta monitoreada (Nessie Account ID del familiar)
+        </label>
+        <div className="flex gap-2">
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            className="flex-1 h-12 px-3 rounded-xl border border-gray-300 text-sm text-[#003A6F] focus:outline-none focus:ring-2 focus:ring-[#003A6F]"
+          />
+          <button
+            onClick={() => setMonitoredId(draft.trim())}
+            className="h-12 px-4 rounded-xl bg-[#003A6F] text-white text-sm font-semibold"
+          >
+            Ver
+          </button>
+        </div>
+      </div>
+      <CoPilotTab monitoredAccountId={monitoredId} />
+    </div>
+  )
+}
