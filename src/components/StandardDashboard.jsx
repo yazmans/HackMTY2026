@@ -11,6 +11,38 @@ import {
   ChevronRight,
 } from 'lucide-react'
 import { formatMoney, formatDate } from './Brand.jsx'
+import EmergencyCallButton from './EmergencyCallButton.jsx'
+
+/**
+ * Sums purchase amounts per weekday (Mon-Sun) for the week containing the
+ * most recent purchase, then scales each day to a 0-100 bar height relative
+ * to that week's busiest day. A day with no purchases gets a 0 bar.
+ */
+function computeWeeklyBars(purchases) {
+  const dates = purchases
+    .map((p) => new Date(`${p.purchase_date}T00:00:00`))
+    .filter((d) => !Number.isNaN(d.getTime()))
+  if (!dates.length) return [0, 0, 0, 0, 0, 0, 0]
+
+  const latest = dates.reduce((max, d) => (d > max ? d : max))
+  // getDay(): 0=Sun..6=Sat. Re-index to Mon-first (0=Mon..6=Sun) to find that
+  // day's week boundaries.
+  const dow = (latest.getDay() + 6) % 7
+  const sunday = new Date(latest)
+  sunday.setDate(latest.getDate() + (6 - dow))
+  const monday = new Date(sunday)
+  monday.setDate(sunday.getDate() - 6)
+
+  const totals = Array(7).fill(0)
+  for (const p of purchases) {
+    const d = new Date(`${p.purchase_date}T00:00:00`)
+    if (Number.isNaN(d.getTime()) || d < monday || d > sunday) continue
+    totals[(d.getDay() + 6) % 7] += Number(p.amount) || 0
+  }
+
+  const peak = Math.max(...totals, 1)
+  return totals.map((t) => Math.round((t / peak) * 100))
+}
 
 /** Promo card that opens the Eno Family handshake. Hidden once linked. */
 export function EnoFamilyCard({ onClick }) {
@@ -45,8 +77,9 @@ export default function StandardDashboard({
   onTransfer,
   onSignOut,
   onOpenEnoFamily,
+  showEmergencyCall = false,
 }) {
-  const bars = [38, 62, 24, 80, 45, 70, 33]
+  const bars = computeWeeklyBars(purchases)
 
   if (loading) {
     return <p className="p-6 text-sm text-gray-400">Cargando tu cuenta…</p>
@@ -96,6 +129,8 @@ export default function StandardDashboard({
 
       {onOpenEnoFamily && <EnoFamilyCard onClick={onOpenEnoFamily} />}
 
+      {showEmergencyCall && <EmergencyCallButton />}
+
       <div className="grid grid-cols-4 gap-2">
         {[
           { icon: ArrowUpRight, label: 'Enviar', action: onTransfer },
@@ -139,7 +174,7 @@ export default function StandardDashboard({
           Movimientos recientes
         </h3>
         <ul className="divide-y divide-gray-100">
-          {purchases.slice(0, 8).map((p) => (
+          {purchases.slice(0, 2).map((p) => (
             <li key={p._id} className="flex items-center justify-between px-4 py-3">
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-[#003A6F] truncate">

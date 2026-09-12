@@ -64,7 +64,7 @@ export async function getAccountPurchases(accountId) {
  * description and rejects `medium` and `payee_id` in the body, so the payee is
  * passed as a query param instead.
  */
-export async function createTransfer(payerAccountId, payeeId, amount) {
+export async function createTransfer(payerAccountId, payeeId, amount, description = 'Transfer') {
   return request(
     withKey(`/accounts/${payerAccountId}/transfers`, { payee_id: payeeId }),
     {
@@ -74,7 +74,7 @@ export async function createTransfer(payerAccountId, payeeId, amount) {
         transaction_date: new Date().toISOString().slice(0, 10),
         status: 'pending',
         amount: Number(amount),
-        description: 'Transfer',
+        description,
       }),
     }
   )

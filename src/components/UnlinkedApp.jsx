@@ -13,9 +13,8 @@ import { useAccountData } from '../hooks/useAccountData.js'
  */
 export default function UnlinkedApp() {
   const { session, signOut } = useApp()
-  const { account, purchases, loading, error, reload } = useAccountData(
-    session.customerId,
-    session.accountId
+  const { account, purchases, loading, error, reload, addPurchase } = useAccountData(
+    session.customerId
   )
   const [showTransfer, setShowTransfer] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
@@ -48,9 +47,9 @@ export default function UnlinkedApp() {
 
       {showTransfer && (
         <TransferModal
-          payerAccountId={session.accountId}
+          payerAccountId={account?._id}
+          addPurchase={addPurchase}
           onClose={() => setShowTransfer(false)}
-          onSuccess={reload}
         />
       )}
 

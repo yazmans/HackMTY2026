@@ -7,17 +7,16 @@ export default function LoginScreen() {
   const { signIn } = useApp()
   const [firstName, setFirstName] = useState('')
   const [customerId, setCustomerId] = useState('')
-  const [accountId, setAccountId] = useState('')
   const [error, setError] = useState('')
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    if (!firstName.trim() || !customerId.trim() || !accountId.trim()) {
-      setError('Completa los tres campos para continuar.')
+    if (!firstName.trim() || !customerId.trim()) {
+      setError('Completa los dos campos para continuar.')
       return
     }
     setError('')
-    signIn(firstName, customerId, accountId)
+    signIn(firstName, customerId)
   }
 
   const inputClass =
@@ -54,18 +53,6 @@ export default function LoginScreen() {
               placeholder="5a8a1e...."
               value={customerId}
               onChange={(e) => setCustomerId(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-[#003A6F] mb-1">
-              Nessie Account ID
-            </label>
-            <input
-              className={inputClass}
-              placeholder="5a8a2f...."
-              value={accountId}
-              onChange={(e) => setAccountId(e.target.value)}
             />
           </div>
 

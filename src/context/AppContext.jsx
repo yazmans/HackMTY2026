@@ -27,7 +27,7 @@ function writeStore(value) {
 }
 
 export function AppProvider({ children }) {
-  const [session, setSession] = useState(null) // { firstName, customerId, accountId }
+  const [session, setSession] = useState(null) // { firstName, customerId }
 
   // Eno Family linking state.
   const [enoFamilyRole, setEnoFamilyRole] = useState(null) // null | 'senior' | 'copilot'
@@ -62,11 +62,10 @@ export function AppProvider({ children }) {
     return () => window.removeEventListener('storage', sync)
   }, [])
 
-  const signIn = (firstName, customerId, accountId) =>
+  const signIn = (firstName, customerId) =>
     setSession({
       firstName: firstName.trim(),
       customerId: customerId.trim(),
-      accountId: accountId.trim(),
     })
 
   // Note: the card request deliberately survives sign-out so the senior can log

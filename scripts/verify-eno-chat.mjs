@@ -3,8 +3,9 @@
 import { chromium } from 'playwright'
 
 const URL = 'http://localhost:5199/'
+// Login is Customer ID only now — the app picks the customer's first account
+// itself, so there's no separate Account ID to supply.
 const CUSTOMER = '3c44ce3b-f749-4da3-9eec-d3e048ba529d'
-const ACCOUNT = '8af07e4b-1ec4-4b01-bca8-fc033ea2007c'
 
 // Distinctive: not the placeholder (200.00), not the first category.
 const LIMIT = '737'
@@ -24,7 +25,6 @@ page.on('pageerror', (e) => errors.push(String(e)))
 async function login() {
   await page.getByPlaceholder('Tu nombre').fill('User')
   await page.getByPlaceholder('5a8a1e....').fill(CUSTOMER)
-  await page.getByPlaceholder('5a8a2f....').fill(ACCOUNT)
   await page.getByRole('button', { name: 'Sign In' }).click()
   await page.waitForTimeout(1500)
 }

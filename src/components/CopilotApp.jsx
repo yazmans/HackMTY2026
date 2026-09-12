@@ -14,7 +14,7 @@ import CoPilotTab from './CoPilotTab.jsx'
 import EnoChatbot from './EnoChatbot.jsx'
 import { useApp } from '../context/AppContext.jsx'
 import { useAccountData } from '../hooks/useAccountData.js'
-import { getAccountPurchases } from '../services/api.js'
+import { mockPurchases } from '../data/mockPurchases.js'
 import { detectSubscriptions } from '../utils/algorithms.js'
 
 const TABS = [
@@ -31,14 +31,17 @@ export default function CopilotApp() {
   const [showChat, setShowChat] = useState(false)
   const [toast, setToast] = useState('')
 
-  const { account, purchases, loading, error, reload } = useAccountData(
-    session.customerId,
-    session.accountId
+  const { account, purchases, loading, error, reload, addPurchase } = useAccountData(
+    session.customerId
   )
 
   // The monitored (senior) account. Its id isn't exchanged during linking in
-  // this prototype, so it defaults to the signed-in account and is retargetable.
-  const [monitoredId, setMonitoredId] = useState(session.accountId)
+  // this prototype, so it defaults to the signed-in copilot's own account
+  // (once loaded) and is retargetable.
+  const [monitoredId, setMonitoredId] = useState('')
+  useEffect(() => {
+    if (!monitoredId && account?._id) setMonitoredId(account._id)
+  }, [account, monitoredId])
   const monitored = useMonitoredPurchases(monitoredId)
   const subscriptions = useMemo(
     () => detectSubscriptions(monitored.purchases),
@@ -88,6 +91,7 @@ export default function CopilotApp() {
         {tab === 'copilot' && (
           <div>
             <MonitoredAccountPicker
+              key={monitoredId}
               initial={monitoredId}
               onApply={(id) => setMonitoredId(id)}
             />
@@ -142,9 +146,9 @@ export default function CopilotApp() {
 
       {showTransfer && (
         <TransferModal
-          payerAccountId={session.accountId}
+          payerAccountId={account?._id}
+          addPurchase={addPurchase}
           onClose={() => setShowTransfer(false)}
-          onSuccess={reload}
         />
       )}
 
@@ -159,26 +163,18 @@ export default function CopilotApp() {
   )
 }
 
-/** Purchases for the monitored account, kept separate from the copilot's own. */
+/**
+ * Purchases for the monitored account, kept separate from the copilot's own.
+ * Nessie's purchases feed isn't used for this (see useAccountData.js), so
+ * this reads the same hardcoded month of data — which is what lets the
+ * subscription detector below actually flag the recurring Spotify charge.
+ */
 function useMonitoredPurchases(accountId) {
-  const [purchases, setPurchases] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    setError('')
-    getAccountPurchases(accountId)
-      .then((data) => !cancelled && setPurchases(data))
-      .catch((err) => !cancelled && setError(err.message))
-      .finally(() => !cancelled && setLoading(false))
-    return () => {
-      cancelled = true
-    }
-  }, [accountId])
-
-  return { purchases, loading, error }
+  const purchases = useMemo(
+    () => (accountId ? [...mockPurchases] : []),
+    [accountId]
+  )
+  return { purchases, loading: false, error: '' }
 }
 
 function MonitoredAccountPicker({ initial, onApply }) {

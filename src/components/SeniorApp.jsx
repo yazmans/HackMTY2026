@@ -3,6 +3,7 @@ import { Header, formatMoney, formatDate } from './Brand.jsx'
 import StandardDashboard from './StandardDashboard.jsx'
 import TransferModal from './TransferModal.jsx'
 import ApprovalModal from './ApprovalModal.jsx'
+import EmergencyCallButton from './EmergencyCallButton.jsx'
 import { useApp } from '../context/AppContext.jsx'
 import { useAccountData } from '../hooks/useAccountData.js'
 
@@ -40,9 +41,8 @@ export default function SeniorApp() {
   } = useApp()
   const [isEasyMode, setIsEasyMode] = useState(true)
   const [showTransfer, setShowTransfer] = useState(false)
-  const { account, purchases, loading, error, reload } = useAccountData(
-    session.customerId,
-    session.accountId
+  const { account, purchases, loading, error, reload, addPurchase } = useAccountData(
+    session.customerId
   )
 
   // Stands in for a real-time cloud listener (Vultr/Firebase): whenever a
@@ -92,16 +92,17 @@ export default function SeniorApp() {
             onReload={reload}
             onTransfer={() => setShowTransfer(true)}
             onSignOut={signOut}
+            showEmergencyCall
           />
         )}
       </div>
 
       {showTransfer && (
         <TransferModal
-          payerAccountId={session.accountId}
+          payerAccountId={account?._id}
           big={isEasyMode}
+          addPurchase={addPurchase}
           onClose={() => setShowTransfer(false)}
-          onSuccess={reload}
         />
       )}
 
@@ -120,6 +121,8 @@ export default function SeniorApp() {
 function EasyMode({ account, purchases, onTransfer }) {
   return (
     <div className="p-4 pb-8 space-y-6">
+      <EmergencyCallButton big />
+
       <section className="bg-white rounded-2xl py-8 px-4 text-center shadow-sm">
         <p className="text-xl font-bold text-[#003A6F]">Tu saldo</p>
         <p className="mt-2 text-5xl font-extrabold text-[#003A6F] tracking-tight">

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { formatMoney } from './Brand.jsx'
 import VirtualCard from './VirtualCard.jsx'
+import SupportCallButton from './SupportCallButton.jsx'
 import { useApp } from '../context/AppContext.jsx'
 
 /**
@@ -237,9 +238,9 @@ export default function CoPilotTab({ subscriptions, loading, error }) {
       </section>
 
       {/* 5. Emergency button */}
-      <button className="w-full bg-[#D03027] text-white font-bold text-lg h-16 rounded-xl mt-6 shadow-md">
-        Contactar a soporte de manera inmediata
-      </button>
+      <div className="mt-6">
+        <SupportCallButton />
+      </div>
     </div>
   )
 }
