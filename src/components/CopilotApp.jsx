@@ -1,11 +1,21 @@
-import { useState } from 'react'
-import { Home, ArrowLeftRight, ShieldCheck, LogOut } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import {
+  Home,
+  ArrowLeftRight,
+  ShieldCheck,
+  LogOut,
+  MessageCircle,
+  CheckCircle2,
+} from 'lucide-react'
 import { Header } from './Brand.jsx'
 import StandardDashboard from './StandardDashboard.jsx'
 import TransferModal from './TransferModal.jsx'
 import CoPilotTab from './CoPilotTab.jsx'
+import EnoChatbot from './EnoChatbot.jsx'
 import { useApp } from '../context/AppContext.jsx'
 import { useAccountData } from '../hooks/useAccountData.js'
+import { getAccountPurchases } from '../services/api.js'
+import { detectSubscriptions } from '../utils/algorithms.js'
 
 const TABS = [
   { key: 'home', label: 'Home', icon: Home },
@@ -18,10 +28,34 @@ export default function CopilotApp() {
   const { session, signOut } = useApp()
   const [tab, setTab] = useState('home')
   const [showTransfer, setShowTransfer] = useState(false)
+  const [showChat, setShowChat] = useState(false)
+  const [toast, setToast] = useState('')
+
   const { account, purchases, loading, error, reload } = useAccountData(
     session.customerId,
     session.accountId
   )
+
+  // The monitored (senior) account. Its id isn't exchanged during linking in
+  // this prototype, so it defaults to the signed-in account and is retargetable.
+  const [monitoredId, setMonitoredId] = useState(session.accountId)
+  const monitored = useMonitoredPurchases(monitoredId)
+  const subscriptions = useMemo(
+    () => detectSubscriptions(monitored.purchases),
+    [monitored.purchases]
+  )
+
+  // Auto-dismiss the success toast.
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(''), 3200)
+    return () => clearTimeout(t)
+  }, [toast])
+
+  const handleRequestSubmitted = () => {
+    setTab('copilot')
+    setToast('Solicitud enviada a Eleanor')
+  }
 
   return (
     <>
@@ -49,12 +83,40 @@ export default function CopilotApp() {
           />
         )}
 
-        {tab === 'transfers' && (
-          <TransfersTab onNew={() => setShowTransfer(true)} />
-        )}
+        {tab === 'transfers' && <TransfersTab onNew={() => setShowTransfer(true)} />}
 
-        {tab === 'copilot' && <CoPilotHost session={session} />}
+        {tab === 'copilot' && (
+          <div>
+            <MonitoredAccountPicker
+              initial={monitoredId}
+              onApply={(id) => setMonitoredId(id)}
+            />
+            <CoPilotTab
+              subscriptions={subscriptions}
+              loading={monitored.loading}
+              error={monitored.error}
+            />
+          </div>
+        )}
       </div>
+
+      {/* Eno FAB, floating above the bottom nav. */}
+      {!showChat && (
+        <button
+          onClick={() => setShowChat(true)}
+          aria-label="Abrir Eno"
+          className="absolute bottom-[96px] right-4 z-[55] h-14 w-14 rounded-full bg-[#D03027] text-white shadow-lg flex items-center justify-center active:opacity-90"
+        >
+          <MessageCircle size={26} />
+        </button>
+      )}
+
+      {toast && (
+        <div className="absolute bottom-[176px] left-4 right-4 z-[85] rounded-xl bg-[#003A6F] text-white px-4 py-3 shadow-lg flex items-center gap-2">
+          <CheckCircle2 size={18} className="text-green-400 shrink-0" />
+          <p className="text-sm font-semibold">{toast}</p>
+        </div>
+      )}
 
       <nav className="absolute bottom-0 w-full h-[80px] bg-white border-t flex justify-around items-center z-50 pb-4">
         {TABS.map(({ key, label, icon: Icon }) => {
@@ -85,7 +147,61 @@ export default function CopilotApp() {
           onSuccess={reload}
         />
       )}
+
+      {showChat && (
+        <EnoChatbot
+          subscriptions={subscriptions}
+          onClose={() => setShowChat(false)}
+          onSubmitted={handleRequestSubmitted}
+        />
+      )}
     </>
+  )
+}
+
+/** Purchases for the monitored account, kept separate from the copilot's own. */
+function useMonitoredPurchases(accountId) {
+  const [purchases, setPurchases] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError('')
+    getAccountPurchases(accountId)
+      .then((data) => !cancelled && setPurchases(data))
+      .catch((err) => !cancelled && setError(err.message))
+      .finally(() => !cancelled && setLoading(false))
+    return () => {
+      cancelled = true
+    }
+  }, [accountId])
+
+  return { purchases, loading, error }
+}
+
+function MonitoredAccountPicker({ initial, onApply }) {
+  const [draft, setDraft] = useState(initial)
+  return (
+    <div className="px-4 pt-4">
+      <label className="block text-xs font-semibold text-gray-600 mb-1">
+        Cuenta monitoreada (Nessie Account ID del familiar)
+      </label>
+      <div className="flex gap-2">
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          className="flex-1 h-12 px-3 rounded-xl border border-gray-300 text-sm text-[#003A6F] focus:outline-none focus:ring-2 focus:ring-[#003A6F]"
+        />
+        <button
+          onClick={() => onApply(draft.trim())}
+          className="h-12 px-4 rounded-xl bg-[#003A6F] text-white text-sm font-semibold"
+        >
+          Ver
+        </button>
+      </div>
+    </div>
   )
 }
 
@@ -114,37 +230,6 @@ function TransfersTab({ onNew }) {
           ))}
         </ul>
       </div>
-    </div>
-  )
-}
-
-// The linked senior's account id isn't exchanged in this prototype, so the
-// caregiver dashboard defaults to the signed-in account and can be retargeted.
-function CoPilotHost({ session }) {
-  const [monitoredId, setMonitoredId] = useState(session.accountId)
-  const [draft, setDraft] = useState(session.accountId)
-
-  return (
-    <div>
-      <div className="px-4 pt-4">
-        <label className="block text-xs font-semibold text-gray-600 mb-1">
-          Cuenta monitoreada (Nessie Account ID del familiar)
-        </label>
-        <div className="flex gap-2">
-          <input
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            className="flex-1 h-12 px-3 rounded-xl border border-gray-300 text-sm text-[#003A6F] focus:outline-none focus:ring-2 focus:ring-[#003A6F]"
-          />
-          <button
-            onClick={() => setMonitoredId(draft.trim())}
-            className="h-12 px-4 rounded-xl bg-[#003A6F] text-white text-sm font-semibold"
-          >
-            Ver
-          </button>
-        </div>
-      </div>
-      <CoPilotTab monitoredAccountId={monitoredId} />
     </div>
   )
 }

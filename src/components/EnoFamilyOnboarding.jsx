@@ -1,13 +1,6 @@
 import { useState } from 'react'
-import {
-  X,
-  UserPlus,
-  Users,
-  Loader2,
-  ShieldCheck,
-  Delete,
-  ArrowLeft,
-} from 'lucide-react'
+import { X, UserPlus, Users, Loader2, ShieldCheck, ArrowLeft } from 'lucide-react'
+import PinPad, { PinDots } from './PinPad.jsx'
 import { useApp } from '../context/AppContext.jsx'
 
 const STEPS = {
@@ -268,19 +261,8 @@ function ConsentStep({ onAuthorized }) {
         Ingresa tu NIP para firmar
       </p>
 
-      <div className="mt-3 flex justify-center gap-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div
-            key={i}
-            className={`h-14 w-14 rounded-xl bg-white border-2 flex items-center justify-center ${
-              i === nip.length ? 'border-[#003A6F]' : 'border-gray-300'
-            }`}
-          >
-            <span className="text-3xl leading-none text-[#003A6F]">
-              {nip[i] ? '•' : ''}
-            </span>
-          </div>
-        ))}
+      <div className="mt-3">
+        <PinDots value={nip} />
       </div>
 
       {error && (
@@ -308,44 +290,3 @@ function ConsentStep({ onAuthorized }) {
   )
 }
 
-/* ----------------------------- Shared pin-pad ---------------------------- */
-
-function PinPad({ value, onChange, maxLength }) {
-  const press = (digit) => {
-    if (value.length >= maxLength) return
-    onChange(value + digit)
-  }
-  const backspace = () => onChange(value.slice(0, -1))
-
-  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
-
-  return (
-    <div className="grid grid-cols-3 gap-3">
-      {keys.map((k) => (
-        <PinKey key={k} onClick={() => press(k)}>
-          {k}
-        </PinKey>
-      ))}
-      <div />
-      <PinKey onClick={() => press('0')}>0</PinKey>
-      <button
-        onClick={backspace}
-        aria-label="Borrar"
-        className="h-14 rounded-xl flex items-center justify-center text-[#003A6F] active:bg-gray-200"
-      >
-        <Delete size={22} />
-      </button>
-    </div>
-  )
-}
-
-function PinKey({ children, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      className="h-14 rounded-xl bg-white shadow-sm text-2xl font-semibold text-[#003A6F] active:bg-gray-100"
-    >
-      {children}
-    </button>
-  )
-}

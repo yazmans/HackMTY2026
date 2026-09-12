@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useState } from 'react'
 import {
   ShieldCheck,
   AlertTriangle,
@@ -8,46 +8,24 @@ import {
   Check,
   Pause,
   Plus,
+  Loader2,
 } from 'lucide-react'
 import { formatMoney } from './Brand.jsx'
-import { getAccountPurchases } from '../services/api.js'
-import { detectSubscriptions } from '../utils/algorithms.js'
+import VirtualCard from './VirtualCard.jsx'
+import { useApp } from '../context/AppContext.jsx'
 
 /**
  * Marcus's monitoring dashboard over Eleanor's account.
- * @param {string} monitoredAccountId Eleanor's Nessie account id
+ * Subscriptions are computed by the parent so the Eno chat can read them too.
  */
-export default function CoPilotTab({ monitoredAccountId }) {
-  const [purchases, setPurchases] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+export default function CoPilotTab({ subscriptions, loading, error }) {
+  const { pendingCardRequest, cardRequestStatus, clearCardRequest } = useApp()
 
   const [alertState, setAlertState] = useState('pending') // pending | approved | held
 
   const [cardLimit, setCardLimit] = useState('')
   const [cardCategory, setCardCategory] = useState('Farmacia')
   const [issuedCards, setIssuedCards] = useState([])
-
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    setError('')
-    getAccountPurchases(monitoredAccountId)
-      .then((data) => {
-        if (!cancelled) setPurchases(data)
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err.message)
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [monitoredAccountId])
-
-  const subscriptions = useMemo(() => detectSubscriptions(purchases), [purchases])
 
   const issueCard = (e) => {
     e.preventDefault()
@@ -127,6 +105,38 @@ export default function CoPilotTab({ monitoredAccountId }) {
           <CreditCard size={18} className="text-[#003A6F]" />
           <h3 className="font-bold text-[#003A6F]">Tarjetas Virtuales</h3>
         </div>
+
+        {/* Card requested through the Eno chat: awaiting the senior's NIP. */}
+        {cardRequestStatus === 'pending' && pendingCardRequest && (
+          <div className="mb-3 rounded-xl bg-[#F4F6F8] border border-[#003A6F]/20 px-3 py-4 flex items-center gap-3">
+            <Loader2 size={20} className="text-[#003A6F] animate-spin shrink-0" />
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-[#003A6F]">
+                Esperando autorización de Eleanor...
+              </p>
+              <p className="text-xs text-gray-500 truncate">
+                {pendingCardRequest.category} · {formatMoney(pendingCardRequest.limit)}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Approved: render the card from the values typed in the chat. */}
+        {cardRequestStatus === 'approved' && pendingCardRequest && (
+          <div className="mb-3">
+            <VirtualCard
+              category={pendingCardRequest.category}
+              limit={pendingCardRequest.limit}
+            />
+            <button
+              onClick={clearCardRequest}
+              className="mt-2 w-full h-12 rounded-xl border-2 border-gray-300 bg-white text-[#003A6F] text-sm font-semibold"
+            >
+              Listo
+            </button>
+          </div>
+        )}
+
         <form onSubmit={issueCard} className="space-y-3">
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1">

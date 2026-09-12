@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Header, formatMoney, formatDate } from './Brand.jsx'
 import StandardDashboard from './StandardDashboard.jsx'
 import TransferModal from './TransferModal.jsx'
+import ApprovalModal from './ApprovalModal.jsx'
 import { useApp } from '../context/AppContext.jsx'
 import { useAccountData } from '../hooks/useAccountData.js'
 
@@ -29,13 +30,27 @@ function EasyToggle({ value, onChange }) {
 
 /** Unlocked for enoFamilyRole === 'senior'. */
 export default function SeniorApp() {
-  const { session, signOut } = useApp()
+  const {
+    session,
+    signOut,
+    pendingCardRequest,
+    cardRequestStatus,
+    approveCardRequest,
+    clearCardRequest,
+  } = useApp()
   const [isEasyMode, setIsEasyMode] = useState(true)
   const [showTransfer, setShowTransfer] = useState(false)
   const { account, purchases, loading, error, reload } = useAccountData(
     session.customerId,
     session.accountId
   )
+
+  // Stands in for a real-time cloud listener (Vultr/Firebase): whenever a
+  // pending request appears in shared state, surface the approval modal.
+  const [showApproval, setShowApproval] = useState(false)
+  useEffect(() => {
+    setShowApproval(cardRequestStatus === 'pending' && !!pendingCardRequest)
+  }, [cardRequestStatus, pendingCardRequest])
 
   return (
     <>
@@ -87,6 +102,14 @@ export default function SeniorApp() {
           big={isEasyMode}
           onClose={() => setShowTransfer(false)}
           onSuccess={reload}
+        />
+      )}
+
+      {showApproval && pendingCardRequest && (
+        <ApprovalModal
+          pendingCardRequest={pendingCardRequest}
+          onApprove={approveCardRequest}
+          onReject={clearCardRequest}
         />
       )}
     </>

@@ -17,6 +17,16 @@ body {
   font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
+/* Full-frame panels (Eno chat) slide up from the bottom. */
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
 /* Hide scrollbars inside the phone frame so it reads like a native app. */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
