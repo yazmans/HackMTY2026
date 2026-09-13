@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Home,
   ArrowLeftRight,
@@ -14,8 +14,7 @@ import CoPilotTab from './CoPilotTab.jsx'
 import EnoChatbot from './EnoChatbot.jsx'
 import { useApp } from '../context/AppContext.jsx'
 import { useAccountData } from '../hooks/useAccountData.js'
-import { mockPurchases } from '../data/mockPurchases.js'
-import { detectSubscriptions } from '../utils/algorithms.js'
+import { getAccountBills } from '../services/api.js'
 
 const TABS = [
   { key: 'home', label: 'Home', icon: Home },
@@ -42,11 +41,8 @@ export default function CopilotApp() {
   useEffect(() => {
     if (!monitoredId && account?._id) setMonitoredId(account._id)
   }, [account, monitoredId])
-  const monitored = useMonitoredPurchases(monitoredId)
-  const subscriptions = useMemo(
-    () => detectSubscriptions(monitored.purchases),
-    [monitored.purchases]
-  )
+  const monitored = useMonitoredBills(monitoredId)
+  const subscriptions = monitored.bills
 
   // Auto-dismiss the success toast.
   useEffect(() => {
@@ -164,17 +160,33 @@ export default function CopilotApp() {
 }
 
 /**
- * Purchases for the monitored account, kept separate from the copilot's own.
- * Nessie's purchases feed isn't used for this (see useAccountData.js), so
- * this reads the same hardcoded month of data — which is what lets the
- * subscription detector below actually flag the recurring Spotify charge.
+ * Real Nessie bills for the monitored account — this is the "Fugas por
+ * suscripción" data, kept separate from the copilot's own purchases.
  */
-function useMonitoredPurchases(accountId) {
-  const purchases = useMemo(
-    () => (accountId ? [...mockPurchases] : []),
-    [accountId]
-  )
-  return { purchases, loading: false, error: '' }
+function useMonitoredBills(accountId) {
+  const [bills, setBills] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!accountId) {
+      setBills([])
+      setLoading(false)
+      return
+    }
+    let cancelled = false
+    setLoading(true)
+    setError('')
+    getAccountBills(accountId)
+      .then((data) => !cancelled && setBills(Array.isArray(data) ? data : []))
+      .catch((err) => !cancelled && setError(err.message))
+      .finally(() => !cancelled && setLoading(false))
+    return () => {
+      cancelled = true
+    }
+  }, [accountId])
+
+  return { bills, loading, error }
 }
 
 function MonitoredAccountPicker({ initial, onApply }) {

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import {
   ArrowUpRight,
   ArrowDownLeft,
@@ -6,12 +7,14 @@ import {
   Receipt,
   Settings,
   TrendingUp,
+  Repeat,
   LogOut,
   ShieldCheck,
   ChevronRight,
 } from 'lucide-react'
 import { formatMoney, formatDate } from './Brand.jsx'
 import EmergencyCallButton from './EmergencyCallButton.jsx'
+import { getAccountBills } from '../services/api.js'
 
 /**
  * Sums purchase amounts per weekday (Mon-Sun) for the week containing the
@@ -89,8 +92,32 @@ export default function StandardDashboard({
   onSignOut,
   onOpenEnoFamily,
   showEmergencyCall = false,
+  showSubscriptions = false,
 }) {
   const bars = computeWeeklyBars(purchases)
+
+  // Real Nessie bills — not derived from purchases — same data source as
+  // the copilot's "Fugas por suscripción" (see CopilotApp.jsx).
+  const [bills, setBills] = useState([])
+  const [billsLoading, setBillsLoading] = useState(true)
+  const [billsError, setBillsError] = useState('')
+
+  useEffect(() => {
+    if (!showSubscriptions || !account?._id) {
+      setBillsLoading(false)
+      return
+    }
+    let cancelled = false
+    setBillsLoading(true)
+    setBillsError('')
+    getAccountBills(account._id)
+      .then((data) => !cancelled && setBills(Array.isArray(data) ? data : []))
+      .catch((err) => !cancelled && setBillsError(err.message))
+      .finally(() => !cancelled && setBillsLoading(false))
+    return () => {
+      cancelled = true
+    }
+  }, [showSubscriptions, account?._id])
 
   if (loading) {
     return <p className="p-6 text-sm text-gray-400">Cargando tu cuenta…</p>
@@ -203,6 +230,47 @@ export default function StandardDashboard({
           )}
         </ul>
       </div>
+
+      {showSubscriptions && (
+        <div className="bg-white rounded-2xl shadow-sm p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Repeat size={16} className="text-[#003A6F]" />
+            <h3 className="text-sm font-bold text-[#003A6F]">Fugas por suscripción</h3>
+          </div>
+
+          {billsLoading && <p className="text-sm text-gray-400">Buscando suscripciones…</p>}
+          {billsError && !billsLoading && (
+            <p className="text-xs text-[#D03027] break-words">{billsError}</p>
+          )}
+          {!billsLoading && !billsError && bills.length === 0 && (
+            <p className="text-sm text-gray-500">
+              No detectamos cargos recurrentes en esta cuenta.
+            </p>
+          )}
+
+          <ul className="space-y-2">
+            {bills.map((bill) => (
+              <li
+                key={bill._id}
+                className="rounded-xl bg-[#F4F6F8] px-3 py-3 flex items-center justify-between gap-3"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-[#003A6F] truncate">
+                    {bill.payee}
+                  </p>
+                  <p className="text-xs text-gray-500 truncate">{bill.nickname}</p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">
+                    Próximo cobro: {formatDate(bill.upcoming_payment_date || bill.payment_date)}
+                  </p>
+                </div>
+                <span className="text-sm font-bold text-[#D03027] shrink-0">
+                  {formatMoney(bill.payment_amount)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {onSignOut && (
         <div className="bg-white rounded-2xl shadow-sm divide-y divide-gray-100">

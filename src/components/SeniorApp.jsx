@@ -93,6 +93,7 @@ export default function SeniorApp() {
             onTransfer={() => setShowTransfer(true)}
             onSignOut={signOut}
             showEmergencyCall
+            showSubscriptions
           />
         )}
       </div>

@@ -10,7 +10,7 @@ import {
   Plus,
   Loader2,
 } from 'lucide-react'
-import { formatMoney } from './Brand.jsx'
+import { formatMoney, formatDate } from './Brand.jsx'
 import VirtualCard from './VirtualCard.jsx'
 import SupportCallButton from './SupportCallButton.jsx'
 import { useApp } from '../context/AppContext.jsx'
@@ -259,14 +259,14 @@ export default function CoPilotTab({ subscriptions, loading, error }) {
         )}
       </section>
 
-      {/* 4. Subscription leaks */}
+      {/* 4. Subscription leaks — real Nessie bills, not derived from purchases. */}
       <section className="rounded-2xl bg-white shadow-sm p-4">
         <div className="flex items-center gap-2 mb-3">
           <Repeat size={18} className="text-[#003A6F]" />
           <h3 className="font-bold text-[#003A6F]">Fugas por suscripción</h3>
         </div>
 
-        {loading && <p className="text-sm text-gray-400">Analizando movimientos…</p>}
+        {loading && <p className="text-sm text-gray-400">Buscando suscripciones…</p>}
         {error && !loading && (
           <p className="text-xs text-[#D03027] break-words">{error}</p>
         )}
@@ -278,24 +278,22 @@ export default function CoPilotTab({ subscriptions, loading, error }) {
         )}
 
         <ul className="space-y-2">
-          {subscriptions.map((s) => (
+          {subscriptions.map((bill) => (
             <li
-              key={s.merchantId}
+              key={bill._id}
               className="rounded-xl bg-[#F4F6F8] px-3 py-3 flex items-center justify-between gap-3"
             >
               <div className="min-w-0">
                 <p className="text-sm font-bold text-[#003A6F] truncate">
-                  {s.merchantName}
+                  {bill.payee}
                 </p>
-                <p className="text-xs text-gray-500">
-                  {s.count} cargos · cada ~{Math.round(s.avgIntervalDays)} días
-                </p>
+                <p className="text-xs text-gray-500 truncate">{bill.nickname}</p>
                 <p className="text-[11px] text-gray-400 mt-0.5">
-                  Confianza {(s.score * 100).toFixed(0)}%
+                  Próximo cobro: {formatDate(bill.upcoming_payment_date || bill.payment_date)}
                 </p>
               </div>
               <span className="text-sm font-bold text-[#D03027] shrink-0">
-                {formatMoney(s.avgAmount)}
+                {formatMoney(bill.payment_amount)}
               </span>
             </li>
           ))}

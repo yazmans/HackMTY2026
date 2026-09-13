@@ -1,18 +1,19 @@
 // Hardcoded stand-in for the Nessie purchases feed (see useAccountData.js).
 // Nessie's sandbox purchases are unreliable (some accounts 400 on GET, see
 // the corrupted-merchant_id issue this file was introduced to work around),
-// so the weekly spending chart and the subscription detector both read from
-// this fixed dataset instead.
+// so the weekly spending chart and "Movimientos recientes" read from this
+// fixed dataset instead. Subscriptions/"Fugas por suscripción" no longer
+// derive from these purchases — see CopilotApp.jsx and StandardDashboard.jsx,
+// both of which now fetch real bills via getAccountBills().
 //
 // Anchored on a fixed "today" (not `new Date()`) so the data is
 // deterministic: the most recent Sunday is 2026-09-06, and the dataset spans
 // exactly the 4 Mon-Sun weeks ending on it (2026-08-10 through 2026-09-06).
 export const MOST_RECENT_SUNDAY = '2026-09-06'
 
-// "Spotify Premium" recurs every 7 days across the whole month at a near
-// constant amount (149-152), which is what makes it clear the ~24-char
-// merchant_id format detectSubscriptions() scores it well above its 0.65
-// threshold — see scripts/verify-flow.mjs.
+// "Spotify Premium" recurs every 7 days at a near-constant amount — just
+// realistic-looking recurring spend for the chart/movements now, not fed
+// into any subscription detector.
 export const mockPurchases = [
   // ---- Week 1: 2026-08-10 (Mon) - 2026-08-16 (Sun) ----
   { _id: 'mp_001', merchant_id: 'mch_000000000000000000101', description: 'Renta', amount: 8500.0, purchase_date: '2026-08-10' },

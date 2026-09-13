@@ -77,7 +77,7 @@ export default function EnoChatbot({ onClose, onSubmitted, subscriptions = [] })
   const reviewSubscriptions = () => {
     const summary = subscriptions.length
       ? `Detecté ${subscriptions.length} cargo(s) recurrente(s): ${subscriptions
-          .map((s) => s.merchantName)
+          .map((s) => s.payee)
           .join(', ')}. Puedes revisarlos en el panel de Co-Piloto.`
       : 'No detecté cargos recurrentes en la cuenta por ahora.'
     setUserTurns(['Revisar suscripciones'])
