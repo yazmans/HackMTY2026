@@ -28,13 +28,13 @@ export default function LoginScreen() {
       <div className="flex-1 overflow-y-auto no-scrollbar px-6 py-8">
         <h1 className="text-2xl font-bold text-[#003A6F]">Bienvenido a Capital One</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Inicia sesión con tus datos de Nessie.
+          Inicia sesión con tus datos.
         </p>
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-4">
           <div>
             <label className="block text-sm font-semibold text-[#003A6F] mb-1">
-              Enter First Name
+              Ingresa tu nombre
             </label>
             <input
               className={inputClass}
@@ -46,7 +46,7 @@ export default function LoginScreen() {
 
           <div>
             <label className="block text-sm font-semibold text-[#003A6F] mb-1">
-              Nessie Customer ID
+              Customer ID
             </label>
             <input
               className={inputClass}
