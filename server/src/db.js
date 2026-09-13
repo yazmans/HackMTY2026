@@ -8,12 +8,22 @@
 // parameterized SQL), not the routes that call it.
 import { DatabaseSync } from 'node:sqlite'
 import { existsSync, mkdirSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { dirname, resolve, isAbsolute, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const DATABASE_URL = process.env.DATABASE_URL || './data/links.db'
+// A relative DATABASE_URL is resolved against this file's own directory
+// (server/src/..), not process.cwd() — same CWD-dependency footgun as the
+// dotenv loading in index.js. Without this, launching from the repo root
+// would silently create/read the SQLite file in the wrong place.
+const SERVER_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
+const rawDatabaseUrl = process.env.DATABASE_URL || './data/links.db'
+const DATABASE_URL =
+  rawDatabaseUrl === ':memory:' || isAbsolute(rawDatabaseUrl)
+    ? rawDatabaseUrl
+    : resolve(SERVER_ROOT, rawDatabaseUrl)
 
 if (DATABASE_URL !== ':memory:') {
-  const dir = dirname(resolve(DATABASE_URL))
+  const dir = dirname(DATABASE_URL)
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
 }
 
@@ -49,4 +59,19 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_transfer_requests_link ON transfer_requests(link_id);
   CREATE INDEX IF NOT EXISTS idx_transfer_requests_status ON transfer_requests(status);
+
+  -- Virtual card requests from the copilot, awaiting the senior's NIP.
+  -- Shared/persisted here (not sessionStorage) so any login as the senior's
+  -- customerId sees a pending request, in any tab or browser.
+  CREATE TABLE IF NOT EXISTS card_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    senior_customer_id TEXT NOT NULL,
+    copilot_customer_id TEXT NOT NULL,
+    category TEXT NOT NULL,
+    card_limit REAL NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_card_requests_senior ON card_requests(senior_customer_id);
+  CREATE INDEX IF NOT EXISTS idx_card_requests_copilot ON card_requests(copilot_customer_id);
 `)

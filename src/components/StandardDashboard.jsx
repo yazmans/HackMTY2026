@@ -44,6 +44,17 @@ function computeWeeklyBars(purchases) {
   return totals.map((t) => Math.round((t / peak) * 100))
 }
 
+// The bar row is a fixed h-24 (96px), but its flex children aren't stretched
+// (items-end sizes them to content), so a CSS `height: X%` on the bar itself
+// resolves against an "auto" parent and renders as 0px regardless of X —
+// this is what made the chart look empty. Computing an explicit pixel height
+// against a fixed track avoids that entirely, and the 6px floor keeps every
+// day visibly non-zero even when its real total is 0.
+const BAR_TRACK_PX = 72
+function barHeightPx(percent) {
+  return Math.max(6, Math.round((percent / 100) * BAR_TRACK_PX))
+}
+
 /** Promo card that opens the Eno Family handshake. Hidden once linked. */
 export function EnoFamilyCard({ onClick }) {
   return (
@@ -159,7 +170,7 @@ export default function StandardDashboard({
             <div key={i} className="flex-1 flex flex-col items-center gap-1">
               <div
                 className="w-full rounded-t bg-[#003A6F]/80"
-                style={{ height: `${h}%` }}
+                style={{ height: `${barHeightPx(h)}px` }}
               />
               <span className="text-[10px] text-gray-400">
                 {['L', 'M', 'M', 'J', 'V', 'S', 'D'][i]}

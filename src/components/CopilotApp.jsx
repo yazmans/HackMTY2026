@@ -57,7 +57,7 @@ export default function CopilotApp() {
 
   const handleRequestSubmitted = () => {
     setTab('copilot')
-    setToast('Solicitud enviada a Eleanor')
+    setToast('Solicitud enviada a tu familiar')
   }
 
   return (
@@ -218,7 +218,7 @@ function TransfersTab({ onNew }) {
       <div className="bg-white rounded-2xl p-4 shadow-sm">
         <h3 className="text-sm font-bold text-[#003A6F] mb-2">Contactos frecuentes</h3>
         <ul className="divide-y divide-gray-100">
-          {['Eleanor R.', 'Renta', 'Ahorro familiar'].map((name) => (
+          {['Familiar', 'Renta', 'Ahorro familiar'].map((name) => (
             <li key={name} className="py-3 flex items-center justify-between">
               <span className="text-sm text-[#003A6F] font-medium">{name}</span>
               <span className="text-xs text-gray-400">Nessie</span>

@@ -24,11 +24,17 @@ const formatRequestTime = (createdAt) => {
 }
 
 /**
- * Marcus's monitoring dashboard over Eleanor's account.
+ * Copilot's monitoring dashboard over their linked senior's account.
  * Subscriptions are computed by the parent so the Eno chat can read them too.
  */
 export default function CoPilotTab({ subscriptions, loading, error }) {
-  const { session, pendingCardRequest, cardRequestStatus, clearCardRequest } = useApp()
+  const {
+    session,
+    pendingCardRequest,
+    cardRequestStatus,
+    requestVirtualCard,
+    dismissCardRequest,
+  } = useApp()
   const copilotCustomerId = session?.customerId
 
   // Pending high-value transfers awaiting this copilot's decision — real
@@ -77,22 +83,27 @@ export default function CoPilotTab({ subscriptions, loading, error }) {
 
   const [cardLimit, setCardLimit] = useState('')
   const [cardCategory, setCardCategory] = useState('Farmacia')
-  const [issuedCards, setIssuedCards] = useState([])
+  const [cardRequestError, setCardRequestError] = useState('')
+  const [cardSubmitting, setCardSubmitting] = useState(false)
 
-  const issueCard = (e) => {
+  // Same authorization-required path as the Eno chat's card flow — this used
+  // to create the card immediately in local state, bypassing the senior
+  // entirely. Now both paths funnel through the one shared request/approve
+  // flow, so neither can skip the NIP step.
+  const issueCard = async (e) => {
     e.preventDefault()
     const limit = parseFloat(cardLimit)
     if (!Number.isFinite(limit) || limit <= 0) return
-    setIssuedCards((prev) => [
-      {
-        id: `vc_${Date.now()}`,
-        limit,
-        category: cardCategory,
-        last4: String(Math.floor(1000 + Math.random() * 9000)),
-      },
-      ...prev,
-    ])
-    setCardLimit('')
+    setCardRequestError('')
+    setCardSubmitting(true)
+    try {
+      await requestVirtualCard({ category: cardCategory, limit })
+      setCardLimit('')
+    } catch (err) {
+      setCardRequestError(err.message)
+    } finally {
+      setCardSubmitting(false)
+    }
   }
 
   return (
@@ -171,13 +182,13 @@ export default function CoPilotTab({ subscriptions, loading, error }) {
           <h3 className="font-bold text-[#003A6F]">Tarjetas Virtuales</h3>
         </div>
 
-        {/* Card requested through the Eno chat: awaiting the senior's NIP. */}
+        {/* Pending, whether requested through the Eno chat or the form below. */}
         {cardRequestStatus === 'pending' && pendingCardRequest && (
           <div className="mb-3 rounded-xl bg-[#F4F6F8] border border-[#003A6F]/20 px-3 py-4 flex items-center gap-3">
             <Loader2 size={20} className="text-[#003A6F] animate-spin shrink-0" />
             <div className="min-w-0">
               <p className="text-sm font-bold text-[#003A6F]">
-                Esperando autorización de Eleanor...
+                Esperando autorización de tu familiar...
               </p>
               <p className="text-xs text-gray-500 truncate">
                 {pendingCardRequest.category} · {formatMoney(pendingCardRequest.limit)}
@@ -186,7 +197,7 @@ export default function CoPilotTab({ subscriptions, loading, error }) {
           </div>
         )}
 
-        {/* Approved: render the card from the values typed in the chat. */}
+        {/* Approved: render the card from whichever path requested it. */}
         {cardRequestStatus === 'approved' && pendingCardRequest && (
           <div className="mb-3">
             <VirtualCard
@@ -194,7 +205,7 @@ export default function CoPilotTab({ subscriptions, loading, error }) {
               limit={pendingCardRequest.limit}
             />
             <button
-              onClick={clearCardRequest}
+              onClick={dismissCardRequest}
               className="mt-2 w-full h-12 rounded-xl border-2 border-gray-300 bg-white text-[#003A6F] text-sm font-semibold"
             >
               Listo
@@ -202,59 +213,49 @@ export default function CoPilotTab({ subscriptions, loading, error }) {
           </div>
         )}
 
-        <form onSubmit={issueCard} className="space-y-3">
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">
-              Límite de monto (USD)
-            </label>
-            <input
-              value={cardLimit}
-              onChange={(e) => setCardLimit(e.target.value)}
-              inputMode="decimal"
-              placeholder="200.00"
-              className="w-full h-12 px-3 rounded-xl border border-gray-300 text-sm text-[#003A6F] focus:outline-none focus:ring-2 focus:ring-[#003A6F]"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">
-              Categoría
-            </label>
-            <select
-              value={cardCategory}
-              onChange={(e) => setCardCategory(e.target.value)}
-              className="w-full h-12 px-3 rounded-xl border border-gray-300 text-sm text-[#003A6F] bg-white focus:outline-none focus:ring-2 focus:ring-[#003A6F]"
-            >
-              <option>Farmacia</option>
-              <option>Supermercado</option>
-              <option>Transporte</option>
-              <option>Servicios médicos</option>
-            </select>
-          </div>
-          <button
-            type="submit"
-            className="w-full h-12 rounded-xl bg-[#003A6F] text-white font-semibold text-sm flex items-center justify-center gap-1"
-          >
-            <Plus size={16} /> Solicitar tarjeta temporal
-          </button>
-        </form>
-
-        {issuedCards.length > 0 && (
-          <ul className="mt-3 space-y-2">
-            {issuedCards.map((c) => (
-              <li
-                key={c.id}
-                className="rounded-xl border border-dashed border-[#003A6F]/40 bg-[#F4F6F8] px-3 py-2 flex items-center justify-between"
+        {/* Only offer to request a new one when there isn't already one in
+            flight — this form goes through the same requestVirtualCard()
+            authorization path as the Eno chat, not a local bypass. */}
+        {cardRequestStatus !== 'pending' && cardRequestStatus !== 'approved' && (
+          <form onSubmit={issueCard} className="space-y-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">
+                Límite de monto (USD)
+              </label>
+              <input
+                value={cardLimit}
+                onChange={(e) => setCardLimit(e.target.value)}
+                inputMode="decimal"
+                placeholder="200.00"
+                className="w-full h-12 px-3 rounded-xl border border-gray-300 text-sm text-[#003A6F] focus:outline-none focus:ring-2 focus:ring-[#003A6F]"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">
+                Categoría
+              </label>
+              <select
+                value={cardCategory}
+                onChange={(e) => setCardCategory(e.target.value)}
+                className="w-full h-12 px-3 rounded-xl border border-gray-300 text-sm text-[#003A6F] bg-white focus:outline-none focus:ring-2 focus:ring-[#003A6F]"
               >
-                <div>
-                  <p className="text-sm font-bold text-[#003A6F]">•••• {c.last4}</p>
-                  <p className="text-xs text-gray-500">{c.category}</p>
-                </div>
-                <span className="text-sm font-bold text-[#D03027]">
-                  {formatMoney(c.limit)}
-                </span>
-              </li>
-            ))}
-          </ul>
+                <option>Farmacia</option>
+                <option>Supermercado</option>
+                <option>Transporte</option>
+                <option>Servicios médicos</option>
+              </select>
+            </div>
+            {cardRequestError && (
+              <p className="text-xs text-[#D03027] font-semibold">{cardRequestError}</p>
+            )}
+            <button
+              type="submit"
+              disabled={cardSubmitting}
+              className="w-full h-12 rounded-xl bg-[#003A6F] text-white font-semibold text-sm flex items-center justify-center gap-1 disabled:opacity-60"
+            >
+              <Plus size={16} /> {cardSubmitting ? 'Enviando…' : 'Solicitar tarjeta temporal'}
+            </button>
+          </form>
         )}
       </section>
 

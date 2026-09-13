@@ -37,7 +37,7 @@ export default function SeniorApp() {
     pendingCardRequest,
     cardRequestStatus,
     approveCardRequest,
-    clearCardRequest,
+    rejectCardRequest,
   } = useApp()
   const [isEasyMode, setIsEasyMode] = useState(true)
   const [showTransfer, setShowTransfer] = useState(false)
@@ -110,7 +110,7 @@ export default function SeniorApp() {
         <ApprovalModal
           pendingCardRequest={pendingCardRequest}
           onApprove={approveCardRequest}
-          onReject={clearCardRequest}
+          onReject={rejectCardRequest}
         />
       )}
     </>

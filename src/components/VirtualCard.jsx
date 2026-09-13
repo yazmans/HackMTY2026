@@ -41,7 +41,7 @@ export default function VirtualCard({ category, limit, last4 = '4821' }) {
 
       <div className="mt-4 pt-3 border-t border-white/20 flex items-center gap-1.5">
         <CheckCircle2 size={14} className="text-green-400" />
-        <p className="text-xs text-white/80">Autorizada por Eleanor</p>
+        <p className="text-xs text-white/80">Autorizada</p>
       </div>
     </div>
   )

@@ -160,7 +160,7 @@ check(
   await waitVisible(seniorPage.getByText('Tu copiloto detuvo esta transferencia'))
 )
 check(
-  'Blocked-transaction screen offers a direct line to support (ElevenLabs button)',
+  'Blocked-transaction screen offers a direct line to support',
   await seniorPage.getByRole('button', { name: /Contactar a soporte prioritario/ }).isVisible()
 )
 await seniorPage.screenshot({ path: 'scripts/shots/hold-3-senior-held.png' })

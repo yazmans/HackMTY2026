@@ -1,32 +1,9 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { getLinkStatus } from '../services/linksApi.js'
+import { createCardRequest, resolveCardRequest, getLatestCardRequest } from '../services/cardRequestsApi.js'
 import { connectSocket, disconnectSocket } from '../services/socket.js'
 
 const AppContext = createContext(null)
-
-// The senior and the copilot are separate sessions. In this prototype they are
-// demoed one after the other in the same tab, so the card request is mirrored
-// into sessionStorage: signing out to switch personas must not lose it. This is
-// the seam a real Vultr/Firebase listener would replace.
-const STORE_KEY = 'eno.cardRequest'
-
-function readStore() {
-  try {
-    const raw = sessionStorage.getItem(STORE_KEY)
-    return raw ? JSON.parse(raw) : null
-  } catch {
-    return null
-  }
-}
-
-function writeStore(value) {
-  try {
-    if (value) sessionStorage.setItem(STORE_KEY, JSON.stringify(value))
-    else sessionStorage.removeItem(STORE_KEY)
-  } catch {
-    /* storage unavailable; in-memory state still works */
-  }
-}
 
 export function AppProvider({ children }) {
   const [session, setSession] = useState(null) // { firstName, customerId }
@@ -37,41 +14,23 @@ export function AppProvider({ children }) {
   const [isLinked, setIsLinked] = useState(false)
   const [linkStatusLoading, setLinkStatusLoading] = useState(false)
 
-  // Virtual card request handshake.
-  // pendingCardRequest: { category, limit } | null
+  // Virtual card request handshake — backed by /server/src/routes/cardRequests.js.
+  // Previously mirrored to sessionStorage, which is per-TAB and never reached
+  // the senior in a different tab/browser at all; this is real shared state.
+  // pendingCardRequest: { id, category, limit } | null
   // cardRequestStatus:  'idle' | 'pending' | 'approved'
-  const initial = readStore()
-  const [pendingCardRequest, setPendingCardRequestState] = useState(
-    initial?.request ?? null
-  )
-  const [cardRequestStatus, setCardRequestStatusState] = useState(
-    initial?.status ?? 'idle'
-  )
+  const [pendingCardRequest, setPendingCardRequestState] = useState(null)
+  const [cardRequestStatus, setCardRequestStatusState] = useState('idle')
 
-  // Mirror the handshake to sessionStorage on every change.
-  useEffect(() => {
-    if (!pendingCardRequest && cardRequestStatus === 'idle') writeStore(null)
-    else writeStore({ request: pendingCardRequest, status: cardRequestStatus })
-  }, [pendingCardRequest, cardRequestStatus])
-
-  // Pick up changes made by the other persona (other tab, or a later mount).
-  useEffect(() => {
-    const sync = () => {
-      const stored = readStore()
-      setPendingCardRequestState(stored?.request ?? null)
-      setCardRequestStatusState(stored?.status ?? 'idle')
-    }
-    window.addEventListener('storage', sync)
-    return () => window.removeEventListener('storage', sync)
-  }, [])
-
-  // One socket per signed-in customer, and a one-time check for a link left
-  // over from a previous session — real persistence, not sessionStorage.
+  // One socket per signed-in customer, and a one-time restore of whatever
+  // link / card-request state already exists server-side — real persistence,
+  // works across tabs, browsers, and sign-outs.
   useEffect(() => {
     if (!session) return
     let cancelled = false
     setLinkStatusLoading(true)
-    connectSocket(session.customerId)
+    const socket = connectSocket(session.customerId)
+
     getLinkStatus(session.customerId)
       .then((status) => {
         if (cancelled) return
@@ -83,8 +42,43 @@ export function AppProvider({ children }) {
       .finally(() => {
         if (!cancelled) setLinkStatusLoading(false)
       })
+
+    getLatestCardRequest(session.customerId)
+      .then(({ request }) => {
+        if (cancelled || !request) return
+        if (request.status === 'pending' || request.status === 'approved') {
+          setPendingCardRequestState(request)
+          setCardRequestStatusState(request.status)
+        }
+      })
+      .catch(() => {
+        /* backend unreachable — no pending request to restore */
+      })
+
+    // Real-time: the senior finds out the moment the copilot asks (no
+    // refresh needed, in any tab), and the copilot finds out the moment the
+    // senior decides.
+    const onRequested = (request) => {
+      setPendingCardRequestState(request)
+      setCardRequestStatusState('pending')
+    }
+    const onApproved = (request) => {
+      setPendingCardRequestState(request)
+      setCardRequestStatusState('approved')
+    }
+    const onRejected = () => {
+      setPendingCardRequestState(null)
+      setCardRequestStatusState('idle')
+    }
+    socket.on('card:requested', onRequested)
+    socket.on('card:approved', onApproved)
+    socket.on('card:rejected', onRejected)
+
     return () => {
       cancelled = true
+      socket.off('card:requested', onRequested)
+      socket.off('card:approved', onApproved)
+      socket.off('card:rejected', onRejected)
       disconnectSocket()
     }
   }, [session])
@@ -95,11 +89,11 @@ export function AppProvider({ children }) {
       customerId: customerId.trim(),
     })
 
-  // Note: the card request deliberately survives sign-out so the senior can log
-  // in and approve what the copilot requested.
   const signOut = () => {
     setSession(null)
     resetLink()
+    setPendingCardRequestState(null)
+    setCardRequestStatusState('idle')
   }
 
   const completeLink = (role) => {
@@ -112,16 +106,33 @@ export function AppProvider({ children }) {
     setIsLinked(false)
   }
 
-  /** Copilot submits a card request from the Eno chat. */
-  const requestVirtualCard = ({ category, limit }) => {
-    setPendingCardRequestState({ category, limit: Number(limit) })
+  /** Copilot requests a virtual card — from the Eno chat OR the direct form;
+   * both go through this same authorization-required path. */
+  const requestVirtualCard = async ({ category, limit }) => {
+    const created = await createCardRequest({
+      copilotCustomerId: session.customerId,
+      category,
+      limit: Number(limit),
+    })
+    setPendingCardRequestState(created)
     setCardRequestStatusState('pending')
   }
 
   /** Senior authorizes it with their NIP. */
-  const approveCardRequest = () => setCardRequestStatusState('approved')
+  const approveCardRequest = async () => {
+    await resolveCardRequest(pendingCardRequest.id, 'approved', session.customerId)
+    setCardRequestStatusState('approved')
+  }
 
-  const clearCardRequest = () => {
+  /** Senior declines it. */
+  const rejectCardRequest = async () => {
+    await resolveCardRequest(pendingCardRequest.id, 'rejected', session.customerId)
+    setPendingCardRequestState(null)
+    setCardRequestStatusState('idle')
+  }
+
+  /** Copilot dismisses the approved-card view. Local only — the approval stands. */
+  const dismissCardRequest = () => {
     setPendingCardRequestState(null)
     setCardRequestStatusState('idle')
   }
@@ -141,7 +152,8 @@ export function AppProvider({ children }) {
         cardRequestStatus,
         requestVirtualCard,
         approveCardRequest,
-        clearCardRequest,
+        rejectCardRequest,
+        dismissCardRequest,
       }}
     >
       {children}

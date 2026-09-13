@@ -21,6 +21,8 @@ export default function EnoChatbot({ onClose, onSubmitted, subscriptions = [] })
   // Replies the user picked, so earlier turns stay visible as we advance.
   const [userTurns, setUserTurns] = useState([])
   const [subscriptionReply, setSubscriptionReply] = useState('')
+  const [sendError, setSendError] = useState('')
+  const [sending, setSending] = useState(false)
 
   const scrollRef = useRef(null)
 
@@ -29,7 +31,7 @@ export default function EnoChatbot({ onClose, onSubmitted, subscriptions = [] })
     const list = [
       {
         from: 'eno',
-        text: 'Hola Marcus, soy Eno. He analizado la cuenta y no hay movimientos inusuales. ¿En qué te puedo ayudar?',
+        text: 'Hola, soy Eno. He analizado tu cuenta y no hay movimientos inusuales. ¿En qué te puedo ayudar?',
       },
     ]
     if (userTurns[0]) list.push({ from: 'user', text: userTurns[0] })
@@ -55,7 +57,7 @@ export default function EnoChatbot({ onClose, onSubmitted, subscriptions = [] })
         from: 'eno',
         text: `Entendido. Para emitir una Tarjeta Virtual de ${cardCategory} por ${formatMoney(
           cardLimit
-        )}, necesito enviar una solicitud de autorización al dispositivo de Eleanor.`,
+        )}, necesito enviar una solicitud de autorización al dispositivo de tu familiar.`,
       })
     }
     return list
@@ -102,10 +104,17 @@ export default function EnoChatbot({ onClose, onSubmitted, subscriptions = [] })
     setChatStep(3)
   }
 
-  const sendRequest = () => {
-    requestVirtualCard({ category: cardCategory, limit: cardLimit })
-    onSubmitted?.()
-    onClose()
+  const sendRequest = async () => {
+    setSendError('')
+    setSending(true)
+    try {
+      await requestVirtualCard({ category: cardCategory, limit: cardLimit })
+      onSubmitted?.()
+      onClose()
+    } catch (err) {
+      setSendError(err.message)
+      setSending(false)
+    }
   }
 
   return (
@@ -186,9 +195,14 @@ export default function EnoChatbot({ onClose, onSubmitted, subscriptions = [] })
         )}
 
         {chatStep === 3 && (
-          <QuickReply primary onClick={sendRequest}>
-            Enviar solicitud a Eleanor
-          </QuickReply>
+          <div className="space-y-2">
+            <QuickReply primary onClick={sendRequest} disabled={sending}>
+              {sending ? 'Enviando…' : 'Enviar solicitud a tu familiar'}
+            </QuickReply>
+            {sendError && (
+              <p className="text-sm text-[#D03027] font-semibold px-2">{sendError}</p>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -214,11 +228,12 @@ function Bubble({ from, text }) {
   )
 }
 
-function QuickReply({ children, onClick, primary = false }) {
+function QuickReply({ children, onClick, primary = false, disabled = false }) {
   return (
     <button
       onClick={onClick}
-      className={`w-full h-12 rounded-full font-semibold text-sm ${
+      disabled={disabled}
+      className={`w-full h-12 rounded-full font-semibold text-sm disabled:opacity-60 ${
         primary
           ? 'bg-[#003A6F] text-white'
           : 'border-2 border-[#003A6F] text-[#003A6F] bg-white'

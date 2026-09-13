@@ -10,14 +10,32 @@ import { formatMoney } from './Brand.jsx'
 export default function ApprovalModal({ pendingCardRequest, onApprove, onReject }) {
   const [nip, setNip] = useState('')
   const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
-  const submit = () => {
+  const submit = async () => {
     if (nip.length !== 4) {
       setError('Tu NIP debe tener 4 dígitos.')
       return
     }
     setError('')
-    onApprove()
+    setSubmitting(true)
+    try {
+      await onApprove()
+    } catch (err) {
+      setError(err.message)
+      setSubmitting(false)
+    }
+  }
+
+  const reject = async () => {
+    setError('')
+    setSubmitting(true)
+    try {
+      await onReject()
+    } catch (err) {
+      setError(err.message)
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -31,7 +49,7 @@ export default function ApprovalModal({ pendingCardRequest, onApprove, onReject 
         <div className="p-5">
           <div className="rounded-2xl bg-white p-4 shadow-sm border-l-4 border-[#D03027]">
             <p className="text-xl text-gray-800 leading-relaxed">
-              Marcus solicita crear una Tarjeta Virtual de{' '}
+              Tu familiar solicita crear una Tarjeta Virtual de{' '}
               <span className="font-bold text-[#003A6F]">
                 {pendingCardRequest.category}
               </span>{' '}
@@ -66,13 +84,15 @@ export default function ApprovalModal({ pendingCardRequest, onApprove, onReject 
 
           <button
             onClick={submit}
-            className="mt-5 w-full h-16 rounded-xl bg-[#D03027] text-white font-bold text-xl shadow-md"
+            disabled={submitting}
+            className="mt-5 w-full h-16 rounded-xl bg-[#D03027] text-white font-bold text-xl shadow-md disabled:opacity-60"
           >
-            Autorizar
+            {submitting ? 'Procesando…' : 'Autorizar'}
           </button>
           <button
-            onClick={onReject}
-            className="mt-3 w-full h-12 rounded-xl bg-white border-2 border-gray-300 text-[#003A6F] font-semibold text-lg"
+            onClick={reject}
+            disabled={submitting}
+            className="mt-3 w-full h-12 rounded-xl bg-white border-2 border-gray-300 text-[#003A6F] font-semibold text-lg disabled:opacity-60"
           >
             Rechazar
           </button>

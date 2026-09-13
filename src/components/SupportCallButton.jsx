@@ -1,86 +1,50 @@
-import { useState } from 'react'
-import { PhoneCall, Loader2, Mic } from 'lucide-react'
-import { ConversationProvider, useConversation } from '@elevenlabs/react'
-
-const AGENT_ID = 'agent_1201m2bqez1yfa98hfmtscvhzjq7'
+import { useEffect, useState } from 'react'
+import { PhoneCall, Loader2, X } from 'lucide-react'
 
 const BASE_CLASS =
   'w-full h-16 rounded-xl font-bold text-white shadow-lg flex items-center justify-center gap-2'
 
-function SupportCallButtonInner() {
-  const [error, setError] = useState('')
+/**
+ * Drop-in "call support" button. No real call is placed and no external
+ * service is contacted — pressing it just shows a "calling" pop-up that
+ * closes itself (or can be closed manually).
+ */
+export default function SupportCallButton() {
+  const [open, setOpen] = useState(false)
 
-  // startSession() doesn't throw / return a rejected promise here — a failed
-  // connection (mic permission denied, network, agent unreachable) surfaces
-  // through this onError callback instead, which is what we show below.
-  const conversation = useConversation({
-    onError: (message) => setError(message || 'No se pudo conectar la llamada.'),
-    onDisconnect: () => setError(''),
-  })
+  useEffect(() => {
+    if (!open) return
+    const t = setTimeout(() => setOpen(false), 3000)
+    return () => clearTimeout(t)
+  }, [open])
 
-  const handleClick = () => {
-    if (conversation.status === 'connected') {
-      conversation.endSession()
-      return
-    }
-    setError('')
-    conversation.startSession({ agentId: AGENT_ID })
-  }
-
-  if (conversation.status === 'connecting') {
-    return (
-      <button
-        type="button"
-        disabled
-        className={`${BASE_CLASS} bg-gray-400 cursor-not-allowed`}
-      >
-        <Loader2 size={22} className="animate-spin" />
-        Conectando llamada...
-      </button>
-    )
-  }
-
-  if (conversation.status === 'connected') {
-    return (
-      <button
-        type="button"
-        onClick={handleClick}
-        className={`${BASE_CLASS} bg-[#10893E] active:opacity-90`}
-      >
-        <Mic size={22} className="animate-pulse" />
-        En llamada - Toca para colgar
-      </button>
-    )
-  }
-
-  // 'disconnected' and 'error' both land here: the retry action is the same.
   return (
-    <div className="space-y-2">
+    <>
       <button
         type="button"
-        onClick={handleClick}
+        onClick={() => setOpen(true)}
         className={`${BASE_CLASS} bg-[#D03027] active:opacity-90`}
       >
         <PhoneCall size={22} />
         Contactar a soporte prioritario
       </button>
-      {error && (
-        <p className="text-sm text-[#D03027] font-semibold text-center">{error}</p>
-      )}
-    </div>
-  )
-}
 
-/**
- * Drop-in "call support" button backed by a real-time ElevenLabs voice agent.
- * Self-contained — brings its own ConversationProvider — so it can be placed
- * in the Co-Pilot Tab, a blocked-transaction modal, or anywhere else without
- * the rest of the app needing to know about ElevenLabs.
- */
-export default function SupportCallButton() {
-  return (
-    <ConversationProvider>
-      <SupportCallButtonInner />
-    </ConversationProvider>
+      {open && (
+        <div className="absolute inset-0 z-[95] bg-black/60 flex items-center justify-center p-6">
+          <div className="w-full max-w-xs bg-white rounded-2xl p-6 text-center shadow-xl relative">
+            <button
+              onClick={() => setOpen(false)}
+              aria-label="Cerrar"
+              className="absolute top-3 right-3 h-9 w-9 flex items-center justify-center rounded-full text-gray-400"
+            >
+              <X size={18} />
+            </button>
+            <Loader2 size={40} className="mx-auto text-[#003A6F] animate-spin" />
+            <p className="mt-4 text-lg font-bold text-[#003A6F]">Llamando a soporte…</p>
+            <p className="mt-1 text-sm text-gray-500">Un agente te atenderá en breve.</p>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
