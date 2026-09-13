@@ -14,7 +14,7 @@ import CoPilotTab from './CoPilotTab.jsx'
 import EnoChatbot from './EnoChatbot.jsx'
 import { useApp } from '../context/AppContext.jsx'
 import { useAccountData } from '../hooks/useAccountData.js'
-import { getAccountBills } from '../services/api.js'
+import { getCustomerAccounts, getAccountBills } from '../services/api.js'
 
 const TABS = [
   { key: 'home', label: 'Home', icon: Home },
@@ -24,7 +24,7 @@ const TABS = [
 
 /** Unlocked for enoFamilyRole === 'copilot'. */
 export default function CopilotApp() {
-  const { session, signOut } = useApp()
+  const { session, signOut, linkedSeniorCustomerId } = useApp()
   const [tab, setTab] = useState('home')
   const [showTransfer, setShowTransfer] = useState(false)
   const [showChat, setShowChat] = useState(false)
@@ -34,14 +34,11 @@ export default function CopilotApp() {
     session.customerId
   )
 
-  // The monitored (senior) account. Its id isn't exchanged during linking in
-  // this prototype, so it defaults to the signed-in copilot's own account
-  // (once loaded) and is retargetable.
-  const [monitoredId, setMonitoredId] = useState('')
-  useEffect(() => {
-    if (!monitoredId && account?._id) setMonitoredId(account._id)
-  }, [account, monitoredId])
-  const monitored = useMonitoredBills(monitoredId)
+  // The monitored (senior) account — the real one from the Eno Family link,
+  // never manually typed. Same "first account for this customerId" rule
+  // useAccountData already uses for the signed-in user's own account.
+  const seniorAccount = useSeniorAccount(linkedSeniorCustomerId)
+  const monitored = useMonitoredBills(seniorAccount.account?._id)
   const subscriptions = monitored.bills
 
   // Auto-dismiss the success toast.
@@ -85,18 +82,11 @@ export default function CopilotApp() {
         {tab === 'transfers' && <TransfersTab onNew={() => setShowTransfer(true)} />}
 
         {tab === 'copilot' && (
-          <div>
-            <MonitoredAccountPicker
-              key={monitoredId}
-              initial={monitoredId}
-              onApply={(id) => setMonitoredId(id)}
-            />
-            <CoPilotTab
-              subscriptions={subscriptions}
-              loading={monitored.loading}
-              error={monitored.error}
-            />
-          </div>
+          <CoPilotTab
+            subscriptions={subscriptions}
+            loading={seniorAccount.loading || monitored.loading}
+            error={seniorAccount.error || monitored.error}
+          />
         )}
       </div>
 
@@ -160,6 +150,38 @@ export default function CopilotApp() {
 }
 
 /**
+ * The linked senior's real Nessie account — resolved from their customerId
+ * (which comes from the established Eno Family link, see AppContext.jsx),
+ * never a manually-entered account id. Mirrors how useAccountData.js picks
+ * the signed-in user's own primary account.
+ */
+function useSeniorAccount(seniorCustomerId) {
+  const [account, setAccount] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!seniorCustomerId) {
+      setAccount(null)
+      setLoading(false)
+      return
+    }
+    let cancelled = false
+    setLoading(true)
+    setError('')
+    getCustomerAccounts(seniorCustomerId)
+      .then((accounts) => !cancelled && setAccount(accounts[0] || null))
+      .catch((err) => !cancelled && setError(err.message))
+      .finally(() => !cancelled && setLoading(false))
+    return () => {
+      cancelled = true
+    }
+  }, [seniorCustomerId])
+
+  return { account, loading, error }
+}
+
+/**
  * Real Nessie bills for the monitored account — this is the "Fugas por
  * suscripción" data, kept separate from the copilot's own purchases.
  */
@@ -187,30 +209,6 @@ function useMonitoredBills(accountId) {
   }, [accountId])
 
   return { bills, loading, error }
-}
-
-function MonitoredAccountPicker({ initial, onApply }) {
-  const [draft, setDraft] = useState(initial)
-  return (
-    <div className="px-4 pt-4">
-      <label className="block text-xs font-semibold text-gray-600 mb-1">
-        Cuenta monitoreada (Nessie Account ID del familiar)
-      </label>
-      <div className="flex gap-2">
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          className="flex-1 h-12 px-3 rounded-xl border border-gray-300 text-sm text-[#003A6F] focus:outline-none focus:ring-2 focus:ring-[#003A6F]"
-        />
-        <button
-          onClick={() => onApply(draft.trim())}
-          className="h-12 px-4 rounded-xl bg-[#003A6F] text-white text-sm font-semibold"
-        >
-          Ver
-        </button>
-      </div>
-    </div>
-  )
 }
 
 function TransfersTab({ onNew }) {

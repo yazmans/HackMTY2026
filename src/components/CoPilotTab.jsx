@@ -277,6 +277,8 @@ export default function CoPilotTab({ subscriptions, loading, error }) {
           </p>
         )}
 
+        {/* Names only — the amount is the senior's own private financial
+            detail and stays on their dashboard, not the copilot's. */}
         <ul className="space-y-2">
           {subscriptions.map((bill) => (
             <li
@@ -292,9 +294,6 @@ export default function CoPilotTab({ subscriptions, loading, error }) {
                   Próximo cobro: {formatDate(bill.upcoming_payment_date || bill.payment_date)}
                 </p>
               </div>
-              <span className="text-sm font-bold text-[#D03027] shrink-0">
-                {formatMoney(bill.payment_amount)}
-              </span>
             </li>
           ))}
         </ul>

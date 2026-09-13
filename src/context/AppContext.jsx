@@ -13,6 +13,10 @@ export function AppProvider({ children }) {
   const [enoFamilyRole, setEnoFamilyRole] = useState(null) // null | 'senior' | 'copilot'
   const [isLinked, setIsLinked] = useState(false)
   const [linkStatusLoading, setLinkStatusLoading] = useState(false)
+  // The senior side's real customerId, from the link itself — never a
+  // manually-typed value. Lets the copilot look up the senior's actual
+  // Nessie account (see CopilotApp.jsx) instead of guessing/pasting one.
+  const [linkedSeniorCustomerId, setLinkedSeniorCustomerId] = useState(null)
 
   // Virtual card request handshake — backed by /server/src/routes/cardRequests.js.
   // Previously mirrored to sessionStorage, which is per-TAB and never reached
@@ -34,7 +38,7 @@ export function AppProvider({ children }) {
     getLinkStatus(session.customerId)
       .then((status) => {
         if (cancelled) return
-        if (status.linked) completeLink(status.role)
+        if (status.linked) completeLink(status.role, status.seniorCustomerId)
       })
       .catch(() => {
         /* backend unreachable — fall back to the unlinked flow */
@@ -96,14 +100,16 @@ export function AppProvider({ children }) {
     setCardRequestStatusState('idle')
   }
 
-  const completeLink = (role) => {
+  const completeLink = (role, seniorCustomerId = null) => {
     setEnoFamilyRole(role)
     setIsLinked(true)
+    setLinkedSeniorCustomerId(seniorCustomerId)
   }
 
   const resetLink = () => {
     setEnoFamilyRole(null)
     setIsLinked(false)
+    setLinkedSeniorCustomerId(null)
   }
 
   /** Copilot requests a virtual card — from the Eno chat OR the direct form;
@@ -146,6 +152,7 @@ export function AppProvider({ children }) {
         enoFamilyRole,
         isLinked,
         linkStatusLoading,
+        linkedSeniorCustomerId,
         completeLink,
         resetLink,
         pendingCardRequest,

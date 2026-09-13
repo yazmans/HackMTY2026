@@ -30,8 +30,11 @@ export default function EnoFamilyOnboarding({ onClose }) {
 
   // Senior's freshly-issued code, from the server.
   const [link, setLink] = useState(null) // { id, code, expiresAt }
-  // Copilot's verified link, from the server.
+  // Copilot's verified link, from the server — includes the senior's real
+  // customerId, so CopilotApp.jsx can look up their actual account instead
+  // of the copilot typing/pasting one in.
   const [verifiedLinkId, setVerifiedLinkId] = useState(null)
+  const [verifiedSeniorCustomerId, setVerifiedSeniorCustomerId] = useState(null)
 
   const startSenior = async () => {
     setChoiceError('')
@@ -63,6 +66,7 @@ export default function EnoFamilyOnboarding({ onClose }) {
   const handleVerify = async (code) => {
     const verified = await verifyLink(code, session.customerId)
     setVerifiedLinkId(verified.linkId)
+    setVerifiedSeniorCustomerId(verified.seniorCustomerId)
     setStep(STEPS.COPILOT_WAITING)
   }
 
@@ -74,17 +78,17 @@ export default function EnoFamilyOnboarding({ onClose }) {
     if (!socket) return
     const onAuthorized = (payload) => {
       if (payload.linkId === verifiedLinkId) {
-        completeLink('copilot')
+        completeLink('copilot', verifiedSeniorCustomerId)
         onClose()
       }
     }
     socket.on('link:authorized', onAuthorized)
     return () => socket.off('link:authorized', onAuthorized)
-  }, [step, verifiedLinkId, completeLink, onClose])
+  }, [step, verifiedLinkId, verifiedSeniorCustomerId, completeLink, onClose])
 
   const handleAuthorize = async () => {
     await authorizeLink(link.id, GRANTED_PERMISSIONS)
-    completeLink('senior')
+    completeLink('senior', session.customerId)
     onClose()
   }
 

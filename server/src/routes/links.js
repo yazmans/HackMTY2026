@@ -136,7 +136,7 @@ export function createLinksRouter(io) {
     }
 
     const role = row.senior_customer_id === customerId ? 'senior' : 'copilot'
-    res.json({ linked: true, role, linkId: row.id })
+    res.json({ linked: true, role, linkId: row.id, seniorCustomerId: row.senior_customer_id })
   })
 
   return router
