@@ -1,4 +1,4 @@
-# Capital One Kin
+# ENO Family
 
 A prototype banking app built around **Eno Family**: a consent-based link
 between an elderly account holder (the **senior**) and a trusted family
@@ -32,6 +32,10 @@ The UI is in Spanish (matching the target users); this README is in English.
   [Nessie](http://api.nessieisreal.com) sandbox API; purchases/movements use
   a deterministic hardcoded month (Nessie's sandbox purchases feed is
   unreliable — see `src/data/mockPurchases.js`).
+
+## Live Demo
+
+The application backend and frontend are currently deployed on Vultr. You can test the live prototype here: [http://66.42.81.252]
 
 ## Tech stack
 
