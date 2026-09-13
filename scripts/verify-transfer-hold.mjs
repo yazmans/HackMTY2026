@@ -13,7 +13,7 @@
 //   - Backend:  cd server && npm run dev
 import { chromium } from 'playwright'
 
-const URL = 'http://localhost:5199/'
+const URL = 'https://localhost:5199/'
 // Links persist server-side, so reused IDs would already be linked on a
 // second run and skip straight past UnlinkedApp — keep every run fresh.
 const RUN_ID = Date.now()

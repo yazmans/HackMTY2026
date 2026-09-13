@@ -11,7 +11,7 @@
 //   - Backend:  cd server && npm run dev   (see server/.env for its PORT)
 import { chromium } from 'playwright'
 
-const URL = 'http://localhost:5199/'
+const URL = 'https://localhost:5199/'
 const SENIOR_CUSTOMER_ID = 'link_test_senior'
 const COPILOT_CUSTOMER_ID = 'link_test_copilot'
 

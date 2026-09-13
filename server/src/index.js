@@ -8,7 +8,7 @@ import { createTransfersRouter } from './routes/transfers.js'
 import { attachSocket } from './socket.js'
 
 const PORT = process.env.PORT || 4000
-const CORS_ORIGIN = (process.env.CORS_ORIGIN || 'http://localhost:5199')
+const CORS_ORIGIN = (process.env.CORS_ORIGIN || 'http://localhost:5173')
   .split(',')
   .map((origin) => origin.trim())
 
