@@ -39,4 +39,13 @@ app.get('/health', (req, res) => res.json({ ok: true }))
 
 httpServer.listen(PORT, () => {
   console.log(`Kin links server listening on http://localhost:${PORT}`)
+  // Loud on purpose: a missing key here otherwise only surfaces later, as a
+  // confusing 502 the moment someone approves a high-value transfer — and a
+  // process left running from before .env was fixed will never pick this up
+  // without a real restart (editing .env does not hot-reload).
+  console.log(
+    process.env.NESSIE_API_KEY
+      ? `NESSIE_API_KEY loaded (…${process.env.NESSIE_API_KEY.slice(-4)})`
+      : 'NESSIE_API_KEY is NOT set — high-value transfer approval will fail. Check server/.env.'
+  )
 })
