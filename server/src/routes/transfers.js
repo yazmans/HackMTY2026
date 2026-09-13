@@ -96,10 +96,26 @@ export function createTransfersRouter(io) {
       try {
         await createNessieTransfer(row.payer_account_id, row.payee_id, row.amount, row.concept || 'Transfer')
       } catch (err) {
-        // Leave it pending so the copilot can retry instead of silently losing the request.
-        return res
-          .status(502)
-          .json({ error: `No se pudo ejecutar la transferencia en Nessie: ${err.message}` })
+        const message = `No se pudo ejecutar la transferencia en Nessie: ${err.message}`
+        // Server-side only — never sent to either client — so a real cause
+        // (missing key, Nessie down, bad payload) is visible in the backend
+        // terminal instead of only inferable from the generic client message.
+        console.error(`[transfers] resolve(${id}) approved but Nessie call failed:`, err)
+
+        // Leave the request 'pending' so the copilot can retry — but the
+        // senior must not be left staring at a spinner forever just because
+        // this side failed. Tell them right away, over the same channel
+        // they're already listening on for the success case.
+        emitToCustomer(io, link.senior_customer_id, 'transfer:resolved', {
+          id,
+          decision: 'failed',
+          amount: row.amount,
+          concept: row.concept,
+          payeeId: row.payee_id,
+          error: message,
+        })
+
+        return res.status(502).json({ error: message })
       }
     }
 

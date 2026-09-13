@@ -135,6 +135,15 @@ export default function TransferModal({
         loadHistory()
         onSuccess?.()
         setStatus('done')
+      } else if (payload.decision === 'failed') {
+        // The copilot approved it, but the Nessie call itself failed — don't
+        // leave this modal spinning forever waiting for a response that will
+        // never come; surface it as a retryable error instead.
+        setStatus('error')
+        setError(
+          payload.error ||
+            'Tu copiloto aprobó la transferencia, pero no se pudo completar. Inténtalo de nuevo.'
+        )
       } else {
         setStatus('held')
       }
