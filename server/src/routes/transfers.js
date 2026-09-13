@@ -1,7 +1,6 @@
 import { Router } from 'express'
 import { db } from '../db.js'
 import { emitToCustomer } from '../socket.js'
-import { createTransfer as createNessieTransfer } from '../nessie.js'
 
 const statements = {
   findConsentedLinkForSenior: db.prepare(
@@ -70,7 +69,11 @@ export function createTransfersRouter(io) {
   })
 
   // Copilot's decision. Only the copilot on the request's own link may call this.
-  router.post('/:id/resolve', async (req, res) => {
+  // No real transfer is ever executed here — approving is purely a status
+  // change plus a notification to the senior, who reflects it locally via
+  // the same optimistic addPurchase() a normal instant transfer uses (see
+  // TransferModal.jsx). This is a trust/UX signal, not a real money movement.
+  router.post('/:id/resolve', (req, res) => {
     const id = Number(req.params.id)
     const decision = req.body?.decision
     const copilotCustomerId = String(req.body?.copilotCustomerId || '').trim()
@@ -90,33 +93,6 @@ export function createTransfersRouter(io) {
     const link = statements.findLinkById.get(row.link_id)
     if (!link || link.copilot_customer_id !== copilotCustomerId) {
       return res.status(403).json({ error: 'No autorizado para resolver esta solicitud.' })
-    }
-
-    if (decision === 'approved') {
-      try {
-        await createNessieTransfer(row.payer_account_id, row.payee_id, row.amount, row.concept || 'Transfer')
-      } catch (err) {
-        const message = `No se pudo ejecutar la transferencia en Nessie: ${err.message}`
-        // Server-side only — never sent to either client — so a real cause
-        // (missing key, Nessie down, bad payload) is visible in the backend
-        // terminal instead of only inferable from the generic client message.
-        console.error(`[transfers] resolve(${id}) approved but Nessie call failed:`, err)
-
-        // Leave the request 'pending' so the copilot can retry — but the
-        // senior must not be left staring at a spinner forever just because
-        // this side failed. Tell them right away, over the same channel
-        // they're already listening on for the success case.
-        emitToCustomer(io, link.senior_customer_id, 'transfer:resolved', {
-          id,
-          decision: 'failed',
-          amount: row.amount,
-          concept: row.concept,
-          payeeId: row.payee_id,
-          error: message,
-        })
-
-        return res.status(502).json({ error: message })
-      }
     }
 
     statements.updateStatus.run(decision, id)

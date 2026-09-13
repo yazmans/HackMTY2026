@@ -41,7 +41,7 @@ export default function TransferModal({
   const [payeeId, setPayeeId] = useState('')
   const [concept, setConcept] = useState('')
   const [amount, setAmount] = useState('')
-  // idle | sending | done | error | awaiting_approval | held
+  // idle | sending | done | error | awaiting_approval | approved | held
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
   const [pendingRequestId, setPendingRequestId] = useState(null)
@@ -131,19 +131,14 @@ export default function TransferModal({
     const onResolved = (payload) => {
       if (payload.id !== pendingRequestId) return
       if (payload.decision === 'approved') {
+        // No real Nessie call happens for this — the copilot's approval is
+        // the signal, and this optimistic injection is what actually makes
+        // it show up in the balance/chart/movements, exactly like a normal
+        // instant transfer already does.
         addPurchase?.(buildOptimisticPurchase(payload.concept, payload.amount))
         loadHistory()
         onSuccess?.()
-        setStatus('done')
-      } else if (payload.decision === 'failed') {
-        // The copilot approved it, but the Nessie call itself failed — don't
-        // leave this modal spinning forever waiting for a response that will
-        // never come; surface it as a retryable error instead.
-        setStatus('error')
-        setError(
-          payload.error ||
-            'Tu copiloto aprobó la transferencia, pero no se pudo completar. Inténtalo de nuevo.'
-        )
+        setStatus('approved')
       } else {
         setStatus('held')
       }
@@ -173,6 +168,24 @@ export default function TransferModal({
             <CheckCircle2 size={big ? 72 : 56} className="mx-auto text-green-600" />
             <p className={big ? 'mt-4 text-2xl font-bold text-[#003A6F]' : 'mt-3 text-lg font-bold text-[#003A6F]'}>
               ¡Transferencia enviada!
+            </p>
+            <button
+              onClick={onClose}
+              className={`mt-6 w-full ${big ? 'h-16 text-xl' : 'h-12 text-base'} bg-[#003A6F] text-white font-bold rounded-xl`}
+            >
+              Listo
+            </button>
+          </div>
+        )}
+
+        {status === 'approved' && (
+          <div className="py-6 text-center">
+            <CheckCircle2 size={big ? 72 : 56} className="mx-auto text-green-600" />
+            <p className={big ? 'mt-4 text-2xl font-bold text-[#003A6F]' : 'mt-3 text-lg font-bold text-[#003A6F]'}>
+              ✓ Transferencia aprobada
+            </p>
+            <p className={`mt-2 text-gray-500 ${big ? 'text-lg' : 'text-sm'}`}>
+              Tu copiloto autorizó este envío.
             </p>
             <button
               onClick={onClose}
